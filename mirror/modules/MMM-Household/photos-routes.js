@@ -84,9 +84,10 @@ const countPhotos = (directory) => {
  * @param {string} options.photosDir the folder that holds one photo folder per person
  * @param {number} options.maxPhotos the most photos kept per person
  * @param {object[]} options.guards the JSON-only middleware for requests that change something
+ * @param {function(object, object, function(): void): void} [options.own] middleware that keeps a signed-in person to their own photos
  * @param {object} options.log a logger with log and warn
  */
-const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhotos = 300, guards, log }) => {
+const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhotos = 300, guards, own = (req, res, next) => next(), log }) => {
 	const state = new Map();
 	// The number of the newest photo choice per person. An older choice that
 	// was abandoned stops quietly when a newer one starts.
@@ -193,11 +194,11 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 		next();
 	};
 
-	app.get("/api/photos/:person", known, (req, res) => {
+	app.get("/api/photos/:person", known, own, (req, res) => {
 		res.json({ count: countPhotos(folderOf(req.params.person)), ...stateOf(req.params.person) });
 	});
 
-	app.post("/api/photos/:person/pick", known, ...guards, async (req, res) => {
+	app.post("/api/photos/:person/pick", known, own, ...guards, async (req, res) => {
 		const person = req.params.person;
 		try {
 			// A new choice replaces one that was opened and never finished.
@@ -218,7 +219,7 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 		}
 	});
 
-	app.post("/api/photos/:person/clear", known, ...guards, (req, res) => {
+	app.post("/api/photos/:person/clear", known, own, ...guards, (req, res) => {
 		const folder = folderOf(req.params.person);
 		let removed = 0;
 		try {

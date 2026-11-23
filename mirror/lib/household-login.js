@@ -148,4 +148,29 @@ const createLogin = ({ authUrl = "", cookie = "household_auth", accounts = {}, c
 	return { enabled, authUrl: base, identify, middleware };
 };
 
-module.exports = { cookieValue, createLogin, hostAllowed };
+/**
+ * Tells whether the sender of a request may see and change one person's own
+ * settings. A signed-in person may for themselves only. With login off, and
+ * for requests made on the mirror itself, there is no signed-in person and
+ * everyone's settings are open, as they were before login existed.
+ * @param {object} [login] what the login check attached to the request
+ * @param {string} person whose settings are asked for
+ * @returns {boolean} true when the request may go on
+ */
+const mayActFor = (login, person) => !login || !login.person || login.person === person;
+
+/**
+ * Builds Express middleware that keeps a signed-in person to their own
+ * settings.
+ * @param {function(object): string} personOf picks the person a request is about
+ * @returns {function(object, object, function(): void): void} the middleware
+ */
+const ownOnly = (personOf) => (req, res, next) => {
+	if (!mayActFor(req.login, personOf(req))) {
+		res.status(403).json({ error: "You can change only your own settings" });
+		return;
+	}
+	next();
+};
+
+module.exports = { cookieValue, createLogin, hostAllowed, mayActFor, ownOnly };
