@@ -26,12 +26,33 @@ Our own modules live in `modules/` here and are linked into place by the setup s
 - `MMM-Greeter`: a greeting when a person is recognized. A person with `favorites` gets one of those Pokémon beside it, a different one each day. The pictures are downloaded once to `~/mirror-data/sprites` and are not part of this repository. It sends `TTS_SAY` for a speech module to say the greeting.
 - `MMM-AirQuality`: the US air quality index from Open-Meteo, with no account needed.
 
+- `MMM-Voice`: offline voice commands, described below.
+
 Run the tests on the Pi with:
 
 ```sh
 cd ~/MagicMirror
 node --test "mirror/modules/**/*.test.js"
 ~/mirror-data/venv/bin/python -m unittest discover -s mirror/services
+```
+
+## Voice commands
+
+`MMM-Voice` listens through the webcam's microphone for phrases that start with "mirror". `services/voice.py` recognizes them on the Pi with Vosk and a fixed phrase list, so the recognizer can only answer with a listed phrase. Audio stays in memory and never leaves the Pi. A short tone on the speaker confirms each command.
+
+| Say | What happens |
+|---|---|
+| "Mirror, wake up" | The screen turns on. With nobody recognized it shows the shared view for five minutes. It also overrides quiet hours |
+| "Mirror, good night" | The screen turns off and stays off until you walk away and come back |
+| "Mirror, show the calendar" / "Mirror, hide news" | Shows or hides one feature until you leave. The names are in `MMM-Voice`'s `features` option in `config.js` |
+| "Mirror, good morning" / "Mirror, what is the weather" | Recognized and broadcast as `VOICE_COMMAND`. Nothing answers yet |
+
+To add a command, add an id and its phrases to `MMM-Voice`'s `commands` option and handle `VOICE_COMMAND` in a module. If a phrase uses a word the speech model does not know, the log names the word.
+
+Test a recording without the microphone (16 kHz, 16-bit, mono WAV):
+
+```sh
+~/mirror-data/venv/bin/python ~/MagicMirror/mirror/services/voice.py --commands commands.json --wav phrase.wav
 ```
 
 ## Who sees what

@@ -146,6 +146,46 @@ const problemWith = (input, featureKeys, blocks) => {
 	return null;
 };
 
+/**
+ * Works out what the mirror should show.
+ * @param {object} state what the helper knows right now
+ * @param {string|null} state.person who the camera recognizes, "guest", or null
+ * @param {boolean} state.unknown true when a face is present that matches nobody
+ * @param {object|null} state.profile that person's profile, or null for a guest or nobody
+ * @param {object[]} state.blocks the day's blocks
+ * @param {number} [state.wakeUntil] time in ms until which a spoken "wake up" keeps the mirror on
+ * @param {string|null} [state.asleep] the person who said "good night" and is still there
+ * @param {object} [state.overrides] features switched by voice, by feature key
+ * @param {Date} now the current time
+ * @returns {object} who the view is for, the block of the day and the feature switches
+ */
+const viewFor = ({ person, unknown, profile, blocks, wakeUntil = 0, asleep = null, overrides = {} }, now) => {
+	const block = currentBlock(blocks, now).key;
+	const view = { person: person || null, unknown: Boolean(unknown), quiet: false, block, features: null };
+	const woken = wakeUntil > now.getTime();
+
+	if (view.person && asleep === view.person) {
+		// They said good night. The mirror treats them as absent until they leave.
+		return { ...view, person: null, quiet: true };
+	}
+	if (!view.person && woken) {
+		// "Wake up" with nobody recognized shows the shared view for a while.
+		view.person = "guest";
+	}
+	if (view.person && profile) {
+		const quiet = profile.quietHours;
+		if (quiet.enabled && !woken && inRange(quiet.from, quiet.to, now)) {
+			// In quiet hours the mirror treats the person as absent.
+			return { ...view, person: null, quiet: true };
+		}
+		view.features = { ...profile.blocks[block] };
+	}
+	if (view.person && Object.keys(overrides).length > 0) {
+		view.features = { ...(view.features || {}), ...overrides };
+	}
+	return view;
+};
+
 class ProfileStore {
 	constructor (file) {
 		this.file = file;
@@ -175,4 +215,4 @@ class ProfileStore {
 	}
 }
 
-module.exports = { DEFAULT_BLOCKS, ProfileStore, currentBlock, defaultProfile, inRange, normalize, problemWith };
+module.exports = { DEFAULT_BLOCKS, ProfileStore, currentBlock, defaultProfile, inRange, normalize, problemWith, viewFor };

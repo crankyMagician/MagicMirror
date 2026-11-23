@@ -1,10 +1,10 @@
-/* Run with: node --test mirror/modules/MMM-Household/ */
+// Run with: node --test "mirror/modules/**/*.test.js"
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
-const { DEFAULT_BLOCKS, ProfileStore, currentBlock, inRange, normalize, problemWith } = require("./profiles");
+const { DEFAULT_BLOCKS, ProfileStore, currentBlock, inRange, normalize, problemWith, viewFor } = require("./profiles");
 
 const at = (time) => {
 	const [hours, minutes] = time.split(":").map(Number);
@@ -82,4 +82,57 @@ test("ProfileStore saves and reloads a profile", () => {
 	assert.equal(reloaded.blocks.day.calendar, true);
 	assert.equal(fs.statSync(file).mode & 0o777, 0o600);
 	fs.rmSync(directory, { recursive: true });
+});
+
+const profileOf = (changes = {}) => normalize(changes, FEATURES, DEFAULT_BLOCKS);
+const state = (extra) => ({ person: "heather", unknown: false, profile: profileOf(), blocks: DEFAULT_BLOCKS, ...extra });
+
+test("viewFor gives a person their switches for the block", () => {
+	const view = viewFor(state({ profile: profileOf({ blocks: { evening: { newsfeed: false } } }) }), at("19:00"));
+	assert.equal(view.person, "heather");
+	assert.equal(view.block, "evening");
+	assert.equal(view.features.newsfeed, false);
+	assert.equal(view.features.clock, true);
+});
+
+test("viewFor treats a person in quiet hours as absent", () => {
+	const quiet = profileOf({ quietHours: { enabled: true, from: "23:00", to: "06:00" } });
+	const view = viewFor(state({ profile: quiet }), at("23:30"));
+	assert.equal(view.person, null);
+	assert.equal(view.quiet, true);
+});
+
+test("a spoken wake up overrides quiet hours", () => {
+	const quiet = profileOf({ quietHours: { enabled: true, from: "23:00", to: "06:00" } });
+	const now = at("23:30");
+	const view = viewFor(state({ profile: quiet, wakeUntil: now.getTime() + 60000 }), now);
+	assert.equal(view.person, "heather");
+	assert.equal(view.quiet, false);
+});
+
+test("a spoken wake up with nobody recognized shows the guest view, then expires", () => {
+	const now = at("12:00");
+	const base = { person: null, unknown: false, profile: null, blocks: DEFAULT_BLOCKS };
+	assert.equal(viewFor({ ...base, wakeUntil: now.getTime() + 60000 }, now).person, "guest");
+	assert.equal(viewFor({ ...base, wakeUntil: now.getTime() - 1 }, now).person, null);
+});
+
+test("good night keeps the mirror dark for that person only", () => {
+	assert.equal(viewFor(state({ asleep: "heather" }), at("21:00")).person, null);
+	assert.equal(viewFor(state({ asleep: "sam" }), at("21:00")).person, "heather");
+});
+
+test("voice overrides lie over the profile and also apply to a guest", () => {
+	const view = viewFor(state({ overrides: { newsfeed: false } }), at("12:00"));
+	assert.equal(view.features.newsfeed, false);
+	assert.equal(view.features.calendar, true);
+	const guest = viewFor({ person: "guest", unknown: false, profile: null, blocks: DEFAULT_BLOCKS, overrides: { clock: false } }, at("12:00"));
+	assert.deepEqual(guest.features, { clock: false });
+});
+
+test("viewFor shows nothing personal to nobody", () => {
+	const view = viewFor({ person: null, unknown: true, profile: null, blocks: DEFAULT_BLOCKS }, at("12:00"));
+	assert.equal(view.person, null);
+	assert.equal(view.unknown, true);
+	assert.equal(view.features, null);
 });
