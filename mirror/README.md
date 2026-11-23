@@ -130,7 +130,7 @@ A special day is a date, a person and a line. The first time that person is reco
 MIRROR_SPECIAL_DAYS='[{"date": "12-25", "person": "heather", "line": "Merry Christmas, Heather."}]'
 ```
 
-The date is `MM-DD` for every year or `YYYY-MM-DD` for one year. An entry without a person is for whoever is recognized first.
+The date is `MM-DD` for every year or `YYYY-MM-DD` for one year. An entry without a person is for everyone, and each person gets it once. An anniversary can count its years: give `"since": 2020` and write `{years}` in the line.
 
 No directory module does this. The voice assistants there (`MMM-AssistantMk2`, `MMM-GoogleAssistant`) send audio to Google and answer from Google's data, and the mirror's own modules already hold everything a briefing needs.
 

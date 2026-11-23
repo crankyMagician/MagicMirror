@@ -94,3 +94,12 @@ test("specialFor matches the date and the person", () => {
 	assert.deepEqual(specialFor(days, "heather", now), []);
 	assert.deepEqual(specialFor("not a list", "heather", christmas), []);
 });
+
+test("specialFor counts the years of an anniversary", () => {
+	const days = [{ date: "02-24", since: 2023, line: "Happy anniversary. {years} years married today." }];
+	assert.deepEqual(specialFor(days, "sam", new Date(2027, 1, 24, 9)), [{ key: "2027-02-24.sam.0", line: "Happy anniversary. 4 years married today." }]);
+	// Nothing to count in the year it happened.
+	assert.deepEqual(specialFor(days, "sam", new Date(2023, 1, 24, 9)), []);
+	// Without a starting year the placeholder is dropped.
+	assert.deepEqual(specialFor([{ date: "02-24", line: "Happy {years} anniversary." }], "sam", new Date(2027, 1, 24, 9)), [{ key: "2027-02-24.sam.0", line: "Happy anniversary." }]);
+});

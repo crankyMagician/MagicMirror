@@ -226,7 +226,11 @@
 			.filter(({ entry }) => entry && typeof entry.line === "string" && entry.line.trim() !== "")
 			.filter(({ entry }) => entry.date === full || entry.date === full.slice(5))
 			.filter(({ entry }) => !entry.person || entry.person === person)
-			.map(({ entry, index }) => ({ key: `${full}.${person}.${index}`, line: entry.line.trim() }));
+			// An anniversary gives the year it counts from, and "{years}" in its
+			// line becomes the count. It says nothing in that first year.
+			.map(({ entry, index }) => ({ entry, index, years: Number.isInteger(entry.since) ? now.getFullYear() - entry.since : null }))
+			.filter(({ years }) => years === null || years > 0)
+			.map(({ entry, index, years }) => ({ key: `${full}.${person}.${index}`, line: entry.line.trim().replaceAll("{years}", years === null ? "" : String(years)).replace(/\s+/g, " ").trim() }));
 	};
 
 	const api = { briefing, nextLine, partOfDay, skyWord, specialFor, spokenTime, tasksLine, todayLine, upcoming, weatherLine, whenWords };
