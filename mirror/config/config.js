@@ -197,6 +197,16 @@ const config = {
 			}
 		},
 		{
+			// The mirror's voice. Other modules send TTS_SAY and this one speaks
+			// through ElevenLabs or Cartesia and the USB speaker. The provider,
+			// the voice and the API keys are in config.env. It draws nothing.
+			module: "MMM-Speak",
+			config: {
+				provider: "${MIRROR_SPEECH_PROVIDER}",
+				voiceId: "${MIRROR_SPEECH_VOICE}"
+			}
+		},
+		{
 			// Greets a recognized person. Heather's greeting comes with one of
 			// her favorite Pokémon, a different one each day.
 			module: "MMM-Greeter",
@@ -263,9 +273,9 @@ const config = {
 			}
 		},
 		{
-			// A different Pokémon each day, picked from the date.
+			// A different Pokémon each day, picked from the date. Both see it.
 			module: "MMM-DailyPokemon",
-			classes: "heather",
+			classes: "sam heather",
 			position: "bottom_right",
 			config: {
 				pickByDate: true,

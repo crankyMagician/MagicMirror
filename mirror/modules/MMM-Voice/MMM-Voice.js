@@ -18,6 +18,9 @@ Module.register("MMM-Voice", {
 		wakeWord: "mirror",
 		// ALSA capture device of the microphone.
 		microphone: "plughw:CARD=Webcam",
+		// Capture level to set on that sound card at start, in percent. A webcam
+		// microphone across a room needs it high. Leave null to keep the level.
+		microphoneGain: 90,
 		// Commands recognized with less confidence than this are ignored.
 		minConfidence: 0.8,
 		// Play a short tone when a command is recognized.

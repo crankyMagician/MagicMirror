@@ -28,6 +28,7 @@ Our own modules live in `modules/` here and are linked into place by the setup s
 - `MMM-AirQuality`: the US air quality index from Open-Meteo, with no account needed.
 
 - `MMM-HouseholdTasks`: the open tasks of one Google account, read-only.
+- `MMM-Speak`: the mirror's voice, through ElevenLabs or Cartesia.
 - `MMM-Voice`: offline voice commands, described below.
 
 Run the tests on the Pi with:
@@ -37,6 +38,29 @@ cd ~/MagicMirror
 node --test "mirror/modules/**/*.test.js"
 ~/mirror-data/venv/bin/python -m unittest discover -s mirror/services
 ```
+
+## The mirror's voice
+
+`MMM-Speak` says text aloud through the USB speaker. Any module asks for speech with a notification:
+
+```js
+this.sendNotification("TTS_SAY", { text: "Good morning.", id: "greeting" });
+```
+
+`MMM-Greeter` does this when it greets someone. While the mirror speaks, `MMM-Voice` stops listening so the mirror does not hear itself.
+
+Two speech services are supported, ElevenLabs and Cartesia. `config.env` on the Pi chooses one and holds the keys:
+
+    MIRROR_SPEECH_PROVIDER=cartesia
+    MIRROR_SPEECH_VOICE=<the voice's id in that provider's account>
+    SECRET_ELEVENLABS_API_KEY=...
+    SECRET_CARTESIA_API_KEY=...
+
+Every phrase is cached as raw audio in `~/mirror-data/speech`, so a phrase said before plays from disk and costs nothing. `dailyCharacterLimit` (1,500 by default) caps how much new text is sent per day. The words themselves are never written to the log.
+
+The directory has no module for either service. `MMM-GoogleTTS` gave the `TTS_SAY` notification names, which `MMM-Speak` follows.
+
+Do not play a recording of a command phrase through the speaker by hand. The mirror hears it and obeys.
 
 ## Google calendars and tasks
 
