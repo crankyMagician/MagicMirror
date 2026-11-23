@@ -33,10 +33,25 @@ module.exports = NodeHelper.create({
 				fs.mkdirSync(path.dirname(CHIME), { recursive: true });
 				fs.writeFileSync(CHIME, chimeWav());
 			}
+			this.setMicrophoneGain();
 			this.startService();
 		} else if (notification === "MUTE") {
 			this.send({ cmd: "mute", on: Boolean(payload) });
 		}
+	},
+
+	/** Sets the capture level on the microphone's sound card, when configured. */
+	setMicrophoneGain () {
+		const gain = Number(this.config.microphoneGain);
+		const card = (/CARD=([A-Za-z0-9_-]+)/).exec(String(this.config.microphone));
+		if (!Number.isFinite(gain) || gain <= 0 || !card) {
+			return;
+		}
+		execFile("amixer", ["-q", "-c", card[1], "sset", "Mic", `${Math.min(100, Math.round(gain))}%`], (error) => {
+			if (error) {
+				Log.warn(`Could not set the microphone level: ${error.message}`);
+			}
+		});
 	},
 
 	startService () {
