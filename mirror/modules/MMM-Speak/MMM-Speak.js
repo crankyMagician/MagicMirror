@@ -20,6 +20,10 @@ Module.register("MMM-Speak", {
 		provider: "elevenlabs",
 		// The id of the voice to speak with, in that provider's account.
 		voiceId: "",
+		// Voices people can choose on the settings page, each as
+		// { id, name, about, provider, voiceId }. The provider and voiceId
+		// above are the voice used when nobody has chosen one.
+		voices: [],
 		// The provider's model. Empty picks a fast default for the provider.
 		model: "",
 		// Raw PCM that aplay can play directly.
@@ -38,6 +42,9 @@ Module.register("MMM-Speak", {
 	},
 
 	start () {
+		// How to speak to whoever the mirror sees: their voice, their volume,
+		// and whether they want to be spoken to at all. MMM-Household sends it.
+		this.speech = { voice: "", volume: 100, speak: true };
 		this.sendSocketNotification("CONFIG", this.config);
 	},
 
@@ -62,7 +69,9 @@ Module.register("MMM-Speak", {
 	},
 
 	notificationReceived (notification, payload) {
-		if (notification === "TTS_SAY") {
+		if (notification === "HOUSEHOLD_PRESENCE" && payload && payload.speech) {
+			this.speech = { voice: "", volume: 100, speak: true, ...payload.speech };
+		} else if (notification === "TTS_SAY") {
 			const text = typeof payload === "string" ? payload : payload && (payload.text || payload.content);
 			const id = payload && typeof payload === "object" ? payload.id : undefined;
 			if (!text) {
@@ -72,7 +81,12 @@ Module.register("MMM-Speak", {
 				this.sendNotification("TTS_SAY_ERROR", { id, text, error: "silent hours" });
 				return;
 			}
-			this.sendSocketNotification("SAY", { id, text });
+			if (this.speech.speak === false) {
+				this.sendNotification("TTS_SAY_ERROR", { id, text, error: "this person has speech switched off" });
+				return;
+			}
+			// The voice is fixed now, as the line is queued.
+			this.sendSocketNotification("SAY", { id, text, voice: this.speech.voice, volume: this.speech.volume });
 		} else if (notification === "TTS_STOP") {
 			this.sendSocketNotification("STOP");
 		}

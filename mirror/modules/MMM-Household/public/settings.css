@@ -307,3 +307,23 @@ button.link {
   color: inherit;
   font: inherit;
 }
+
+/* Voice: the sample buttons and the volume slider. */
+#voice-hear,
+#mirror-voice-hear {
+  width: 100%;
+  margin: 0.4rem 0;
+  padding: 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+}
+
+input[type="range"] {
+  flex: 1;
+  max-width: 14rem;
+  accent-color: var(--accent);
+}

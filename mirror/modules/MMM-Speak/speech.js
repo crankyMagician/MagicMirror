@@ -144,4 +144,67 @@ const retrying = async (action, { attempts, waitMs, when, sleep = (ms) => new Pr
 	}
 };
 
-module.exports = { cacheName, prepare, providerFor, retrying, sampleRate, speakerBusy, spend };
+// What MMM-Speak falls back to. MMM-Speak.js repeats these as its defaults,
+// because a browser module cannot load this file.
+const DEFAULTS = { provider: "elevenlabs", voiceId: "", model: "", format: "pcm_22050", dailyCharacterLimit: 1500, maxCachedPhrases: 400 };
+
+/**
+ * Picks the voice to speak with. An id names an entry of the `voices` list in
+ * MMM-Speak's config. An empty or unknown id gives the configured default.
+ * @param {object} config MMM-Speak's config
+ * @param {string} [id] a voice id from the list
+ * @returns {object} the provider, voice id, model and format to use
+ */
+const voiceFor = (config, id) => {
+	const listed = (Array.isArray(config.voices) ? config.voices : []).find((voice) => voice && voice.id === id);
+	const chosen = listed || { provider: config.provider, voiceId: config.voiceId, model: config.model };
+	return {
+		provider: chosen.provider,
+		voiceId: chosen.voiceId,
+		model: chosen.model || providerFor(chosen.provider).defaultModel,
+		format: config.format
+	};
+};
+
+/**
+ * Makes 16-bit audio quieter.
+ * @param {Buffer} pcm signed 16-bit little-endian samples
+ * @param {number} percent the volume, from 0 to 100
+ * @returns {Buffer} the samples at that volume
+ */
+const scalePcm = (pcm, percent) => {
+	const factor = Math.min(100, Math.max(0, Number(percent))) / 100;
+	if (!Number.isFinite(factor) || factor === 1) {
+		return pcm;
+	}
+	const out = Buffer.alloc(pcm.length - (pcm.length % 2));
+	for (let offset = 0; offset < out.length; offset += 2) {
+		out.writeInt16LE(Math.round(pcm.readInt16LE(offset) * factor), offset);
+	}
+	return out;
+};
+
+/**
+ * Wraps raw mono 16-bit audio as a WAV file, which a browser can play.
+ * @param {Buffer} pcm signed 16-bit little-endian samples
+ * @param {number} rate samples per second
+ * @returns {Buffer} the WAV file
+ */
+const wavFrom = (pcm, rate) => {
+	const header = Buffer.alloc(44);
+	header.write("RIFF", 0);
+	header.writeUInt32LE(36 + pcm.length, 4);
+	header.write("WAVEfmt ", 8);
+	header.writeUInt32LE(16, 16);
+	header.writeUInt16LE(1, 20);
+	header.writeUInt16LE(1, 22);
+	header.writeUInt32LE(rate, 24);
+	header.writeUInt32LE(rate * 2, 28);
+	header.writeUInt16LE(2, 32);
+	header.writeUInt16LE(16, 34);
+	header.write("data", 36);
+	header.writeUInt32LE(pcm.length, 40);
+	return Buffer.concat([header, pcm]);
+};
+
+module.exports = { DEFAULTS, cacheName, prepare, providerFor, retrying, sampleRate, scalePcm, speakerBusy, spend, voiceFor, wavFrom };

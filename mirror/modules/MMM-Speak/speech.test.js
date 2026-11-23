@@ -1,7 +1,7 @@
 // Run with: node --test "mirror/modules/**/*.test.js"
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { cacheName, prepare, providerFor, retrying, sampleRate, speakerBusy, spend } = require("./speech");
+const { cacheName, prepare, providerFor, retrying, sampleRate, scalePcm, speakerBusy, spend, voiceFor, wavFrom } = require("./speech");
 
 const voice = { provider: "elevenlabs", voiceId: "v1", model: "eleven_flash_v2_5", format: "pcm_22050" };
 
@@ -105,4 +105,48 @@ test("retrying waits out a busy speaker and gives up on anything else", async ()
 	calls = 0;
 	await assert.rejects(retrying(failing(new Error("no such device")), { attempts: 4, waitMs: 1, when: speakerBusy, sleep }), /no such device/);
 	assert.equal(calls, 1);
+});
+
+test("voiceFor picks a listed voice by id and falls back to the configured one", () => {
+	const config = {
+		provider: "cartesia",
+		voiceId: "built-in",
+		model: "",
+		format: "pcm_22050",
+		voices: [{ id: "julia", provider: "cartesia", voiceId: "voice-julia" }, { id: "eleven", provider: "elevenlabs", voiceId: "voice-e", model: "special" }]
+	};
+	assert.deepEqual(voiceFor(config, "julia"), { provider: "cartesia", voiceId: "voice-julia", model: "sonic-3.5", format: "pcm_22050" });
+	assert.equal(voiceFor(config, "eleven").model, "special");
+	assert.equal(voiceFor(config, "eleven").provider, "elevenlabs");
+	// No choice, or a voice that is no longer offered, gives the built-in voice.
+	assert.equal(voiceFor(config, "").voiceId, "built-in");
+	assert.equal(voiceFor(config, "gone").voiceId, "built-in");
+	assert.equal(voiceFor({ ...config, voices: undefined }, "julia").voiceId, "built-in");
+});
+
+test("scalePcm makes samples quieter and leaves full volume alone", () => {
+	const pcm = Buffer.alloc(6);
+	pcm.writeInt16LE(1000, 0);
+	pcm.writeInt16LE(-2000, 2);
+	pcm.writeInt16LE(32767, 4);
+	const half = scalePcm(pcm, 50);
+	assert.deepEqual([half.readInt16LE(0), half.readInt16LE(2), half.readInt16LE(4)], [500, -1000, 16384]);
+	assert.equal(scalePcm(pcm, 100), pcm);
+	assert.equal(scalePcm(pcm, 0).readInt16LE(4), 0);
+	// Out of range is held to the range, and an odd trailing byte is dropped.
+	assert.equal(scalePcm(pcm, 250), pcm);
+	assert.equal(scalePcm(Buffer.alloc(5), 50).length, 4);
+});
+
+test("wavFrom wraps raw audio in a WAV header a browser accepts", () => {
+	const wav = wavFrom(Buffer.alloc(100), 22050);
+	assert.equal(wav.length, 144);
+	assert.equal(wav.toString("ascii", 0, 4), "RIFF");
+	assert.equal(wav.toString("ascii", 8, 16), "WAVEfmt ");
+	assert.equal(wav.readUInt32LE(4), 136);
+	assert.equal(wav.readUInt16LE(22), 1);
+	assert.equal(wav.readUInt32LE(24), 22050);
+	assert.equal(wav.readUInt32LE(28), 44100);
+	assert.equal(wav.readUInt16LE(34), 16);
+	assert.equal(wav.readUInt32LE(40), 100);
 });

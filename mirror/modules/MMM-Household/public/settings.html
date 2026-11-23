@@ -59,6 +59,23 @@
           </div>
         </section>
 
+        <section id="voice-section" aria-labelledby="voice-title" hidden>
+          <h2 id="voice-title">My voice</h2>
+          <p class="hint">The voice the mirror uses when it speaks to you.</p>
+          <label class="row"
+            >Voice
+            <select id="voice"></select
+          ></label>
+          <p id="voice-about" class="hint"></p>
+          <button id="voice-hear" type="button">Hear this voice</button>
+          <label class="row">Volume <input id="voice-volume" type="range" min="10" max="100" step="10" /></label>
+          <label class="row">
+            <span>Speak to me</span>
+            <input id="voice-speak" type="checkbox" />
+          </label>
+          <p id="voice-note" class="hint" role="status"></p>
+        </section>
+
         <section aria-labelledby="face-title">
           <h2 id="face-title">My face</h2>
           <p id="face-state" class="hint"></p>
@@ -94,6 +111,17 @@
             <label>From <input id="quiet-from" type="time" /></label>
             <label>To <input id="quiet-to" type="time" /></label>
           </div>
+        </section>
+
+        <section id="mirror-voice-section" aria-labelledby="mirror-voice-title" hidden>
+          <h2 id="mirror-voice-title">The mirror's voice</h2>
+          <p class="hint">Used for guests and for anyone who has not chosen a voice of their own.</p>
+          <label class="row"
+            >Voice
+            <select id="mirror-voice"></select
+          ></label>
+          <button id="mirror-voice-hear" type="button">Hear this voice</button>
+          <p id="mirror-voice-note" class="hint" role="status"></p>
         </section>
 
         <section aria-labelledby="parts-title">
