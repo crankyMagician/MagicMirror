@@ -8,18 +8,19 @@
  */
 // Each Google account has a token file on the Pi, written by
 // mirror/tools/google-connect.py. MagicMirror evaluates this file in Node, so
-// the paths can come from the environment. Strings are joined with + here,
-// because MagicMirror replaces dollar-brace names from the environment in
-// this file's text before it runs.
-const dataDir = process.env.MIRROR_DATA_DIR || process.env.HOME + "/mirror-data";
-const googleDir = dataDir + "/google";
+// the paths can come from the environment. Strings are joined with text()
+// here and never with template literals, because MagicMirror replaces
+// dollar-brace names from the environment in this file's text before it runs.
+const text = (...parts) => parts.join("");
+const dataDir = process.env.MIRROR_DATA_DIR || text(process.env.HOME, "/mirror-data");
+const googleDir = text(dataDir, "/google");
 const googleAccount = (name) => ({
-	tokenFile: googleDir + "/" + name + ".json",
-	credentialsFile: googleDir + "/credentials.json"
+	tokenFile: text(googleDir, "/", name, ".json"),
+	credentialsFile: text(googleDir, "/credentials.json")
 });
 const googleCalendar = (person, account, header, feature) => ({
 	module: "MMM-GoogleCalendar",
-	classes: person + " feature-" + feature,
+	classes: text(person, " feature-", feature),
 	header,
 	position: "top_left",
 	config: {
@@ -32,7 +33,7 @@ const googleCalendar = (person, account, header, feature) => ({
 });
 const googleTasks = (person, account, header, feature) => ({
 	module: "MMM-HouseholdTasks",
-	classes: person + " feature-" + feature,
+	classes: text(person, " feature-", feature),
 	header,
 	position: "top_left",
 	config: {
@@ -44,10 +45,10 @@ const googleTasks = (person, account, header, feature) => ({
 // the settings page. It changes every 20 seconds.
 const photoFrame = (person) => ({
 	module: "MMM-ImagesPhotos",
-	classes: person + " feature-photos",
+	classes: text(person, " feature-photos"),
 	position: "lower_third",
 	config: {
-		path: dataDir + "/photos/" + person,
+		path: text(dataDir, "/photos/", person),
 		updateInterval: 20 * 1000,
 		maxWidth: "380px",
 		maxHeight: "380px",
@@ -59,10 +60,10 @@ const photoFrame = (person) => ({
 // sooner see art than their own photos. MMM-Household downloads the feed.
 const artFrame = (person) => ({
 	module: "MMM-ImagesPhotos",
-	classes: person + " feature-art",
+	classes: text(person, " feature-art"),
 	position: "lower_third",
 	config: {
-		path: dataDir + "/art/" + person,
+		path: text(dataDir, "/art/", person),
 		updateInterval: 60 * 1000,
 		maxWidth: "380px",
 		maxHeight: "380px",

@@ -1,3 +1,5 @@
+/* global HouseholdBriefing */
+
 /* MMM-Briefing
  *
  * Gives the mirror things to say. It answers three voice commands and says

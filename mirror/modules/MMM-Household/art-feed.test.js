@@ -9,16 +9,21 @@ const { picturesIn, syncFeed } = require("./art-feed");
 const FEED = "https://art.example/mirror/feed.json";
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 
-/** Builds a fetch that serves one feed and counts the picture downloads. */
+/**
+ * Builds a fetch that serves one feed and counts the picture downloads.
+ * @param {object} feed the feed to serve
+ * @param {object} [pictures] bytes to serve per picture address, or null for one that is missing
+ * @returns {object} the fetch stand-in as `get` and the addresses it was asked for as `calls`
+ */
 const fakeFetch = (feed, pictures = {}) => {
 	const calls = [];
-	const get = async (url) => {
+	const get = (url) => {
 		calls.push(url);
 		if (url === FEED) {
-			return { ok: true, json: async () => feed };
+			return Promise.resolve({ ok: true, json: () => Promise.resolve(feed) });
 		}
 		const data = pictures[url] === undefined ? JPEG : pictures[url];
-		return data === null ? { ok: false, status: 404 } : { ok: true, arrayBuffer: async () => data };
+		return Promise.resolve(data === null ? { ok: false, status: 404 } : { ok: true, arrayBuffer: () => Promise.resolve(data) });
 	};
 	return { get, calls };
 };

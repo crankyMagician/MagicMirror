@@ -138,7 +138,12 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 		return { added, skipped };
 	};
 
-	/** Waits for the person to finish picking, then downloads what they chose. */
+	/**
+	 * Waits for the person to finish picking, then downloads what they chose.
+	 * @param {string} person whose photos these are
+	 * @param {object} session the picker session Google opened
+	 * @param {number} number this choice's number, so a newer one can replace it
+	 */
 	const watch = async (person, session, number) => {
 		const superseded = () => newest.get(person) !== number;
 		const wait = durationMs(session.pollingConfig && session.pollingConfig.pollInterval, 5000);

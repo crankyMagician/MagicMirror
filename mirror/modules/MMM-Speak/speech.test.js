@@ -79,14 +79,18 @@ test("speakerBusy recognizes a speaker that something else is using", () => {
 test("retrying waits out a busy speaker and gives up on anything else", async () => {
 	const busy = new Error("audio open error: Device or resource busy");
 	const pauses = [];
-	const sleep = async (ms) => { pauses.push(ms); };
-	let calls = 0;
-	const result = await retrying(async () => {
+	const sleep = (ms) => {
+		pauses.push(ms);
+		return Promise.resolve();
+	};
+	const failing = (error) => () => {
 		calls += 1;
-		if (calls < 3) {
-			throw busy;
-		}
-		return "played";
+		return Promise.reject(error);
+	};
+	let calls = 0;
+	const result = await retrying(() => {
+		calls += 1;
+		return calls < 3 ? Promise.reject(busy) : Promise.resolve("played");
 	}, { attempts: 8, waitMs: 250, when: speakerBusy, sleep });
 	assert.equal(result, "played");
 	assert.equal(calls, 3);
@@ -94,11 +98,11 @@ test("retrying waits out a busy speaker and gives up on anything else", async ()
 
 	// It stops after the last attempt.
 	calls = 0;
-	await assert.rejects(retrying(async () => { calls += 1; throw busy; }, { attempts: 4, waitMs: 1, when: speakerBusy, sleep }), /busy/);
+	await assert.rejects(retrying(failing(busy), { attempts: 4, waitMs: 1, when: speakerBusy, sleep }), /busy/);
 	assert.equal(calls, 4);
 
 	// A failure that waiting cannot fix is not retried.
 	calls = 0;
-	await assert.rejects(retrying(async () => { calls += 1; throw new Error("no such device"); }, { attempts: 4, waitMs: 1, when: speakerBusy, sleep }), /no such device/);
+	await assert.rejects(retrying(failing(new Error("no such device")), { attempts: 4, waitMs: 1, when: speakerBusy, sleep }), /no such device/);
 	assert.equal(calls, 1);
 });

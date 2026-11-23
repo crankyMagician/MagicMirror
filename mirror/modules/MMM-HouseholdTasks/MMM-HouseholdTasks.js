@@ -1,3 +1,5 @@
+/* global HouseholdTasksDue */
+
 /* MMM-HouseholdTasks
  *
  * Shows the open tasks of one Google account, read-only. Use one instance

@@ -1,9 +1,8 @@
-const fs = require("node:fs");
 const path = require("node:path");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const { pickTasks } = require("./tasks");
 const { SignInNeeded, accessToken } = require("../../lib/google-token");
+const { pickTasks } = require("./tasks");
 
 const API = "https://tasks.googleapis.com/tasks/v1";
 const TIMEOUT = 20000;

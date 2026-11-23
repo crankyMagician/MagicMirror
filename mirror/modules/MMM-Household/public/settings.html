@@ -17,75 +17,74 @@
       <nav id="people" class="people" aria-label="Whose settings"></nav>
 
       <div id="person-view">
-      <section aria-labelledby="appearance-title">
-        <h2 id="appearance-title">Appearance</h2>
-        <p class="hint">The whole mirror uses your theme when it recognizes you.</p>
-        <label class="row"
-          >Theme
-          <select id="theme">
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select></label
-        >
-      </section>
+        <section aria-labelledby="appearance-title">
+          <h2 id="appearance-title">Appearance</h2>
+          <p class="hint">The whole mirror uses your theme when it recognizes you.</p>
+          <label class="row"
+            >Theme
+            <select id="theme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select></label
+          >
+        </section>
 
-      <section id="network-section" aria-labelledby="network-title" hidden>
-        <h2 id="network-title">Network devices</h2>
-        <p class="hint">Browse every connected device and see which network it uses.</p>
-        <a id="network-link" href="/unifi/">Open network devices →</a>
-      </section>
+        <section id="network-section" aria-labelledby="network-title" hidden>
+          <h2 id="network-title">Network devices</h2>
+          <p class="hint">Browse every connected device and see which network it uses.</p>
+          <a id="network-link" href="/unifi/">Open network devices →</a>
+        </section>
 
-      <section aria-labelledby="schedule-title">
-        <h2 id="schedule-title">What I see</h2>
-        <p class="hint">Choose what the mirror shows you in each part of the day.</p>
-        <div class="scroll">
-          <table id="grid"></table>
-        </div>
-      </section>
+        <section aria-labelledby="schedule-title">
+          <h2 id="schedule-title">What I see</h2>
+          <p class="hint">Choose what the mirror shows you in each part of the day.</p>
+          <div class="scroll">
+            <table id="grid"></table>
+          </div>
+        </section>
 
-      <section aria-labelledby="face-title">
-        <h2 id="face-title">My face</h2>
-        <p id="face-state" class="hint"></p>
-        <button id="enroll" type="button">Teach the mirror my face</button>
-        <p id="enroll-note" class="hint" role="status"></p>
-      </section>
+        <section aria-labelledby="face-title">
+          <h2 id="face-title">My face</h2>
+          <p id="face-state" class="hint"></p>
+          <button id="enroll" type="button">Teach the mirror my face</button>
+          <p id="enroll-note" class="hint" role="status"></p>
+        </section>
 
-      <section id="art-section" aria-labelledby="art-title" hidden>
-        <h2 id="art-title">My art</h2>
-        <p id="art-state" class="hint"></p>
-      </section>
+        <section id="art-section" aria-labelledby="art-title" hidden>
+          <h2 id="art-title">My art</h2>
+          <p id="art-state" class="hint"></p>
+        </section>
 
-      <section id="photos-section" aria-labelledby="photos-title" hidden>
-        <h2 id="photos-title">My photos</h2>
-        <p id="photos-state" class="hint"></p>
-        <button id="photos-pick" type="button">Choose photos from Google Photos</button>
-        <button id="photos-clear" type="button">Remove all my photos</button>
-        <p id="photos-note" class="hint" role="status"></p>
-      </section>
-
+        <section id="photos-section" aria-labelledby="photos-title" hidden>
+          <h2 id="photos-title">My photos</h2>
+          <p id="photos-state" class="hint"></p>
+          <button id="photos-pick" type="button">Choose photos from Google Photos</button>
+          <button id="photos-clear" type="button">Remove all my photos</button>
+          <p id="photos-note" class="hint" role="status"></p>
+        </section>
       </div>
 
       <div id="mirror-view" hidden>
-      <p class="hint">These settings belong to the mirror and apply to everyone.</p>
+        <p class="hint">These settings belong to the mirror and apply to everyone.</p>
 
-      <section aria-labelledby="quiet-title">
-        <h2 id="quiet-title">Quiet hours</h2>
-        <p class="hint">During quiet hours the screen stays off and the mirror greets nobody, whoever it sees. Say "mirror, wake up" to use it anyway.</p>
-        <label class="row">
-          <span>Use quiet hours</span>
-          <input id="quiet-enabled" type="checkbox" />
-        </label>
-        <div class="row times">
-          <label>From <input id="quiet-from" type="time" /></label>
-          <label>To <input id="quiet-to" type="time" /></label>
-        </div>
-      </section>
+        <section aria-labelledby="quiet-title">
+          <h2 id="quiet-title">Quiet hours</h2>
+          <p class="hint">During quiet hours the screen stays off and the mirror greets nobody, whoever it sees. Say "mirror, wake up" to use it anyway.</p>
+          <label class="row">
+            <span>Use quiet hours</span>
+            <input id="quiet-enabled" type="checkbox" />
+          </label>
+          <div class="row times">
+            <label>From <input id="quiet-from" type="time" /></label>
+            <label>To <input id="quiet-to" type="time" /></label>
+          </div>
+        </section>
 
-      <section aria-labelledby="parts-title">
-        <h2 id="parts-title">Parts of the day</h2>
-        <p class="hint">When each part of the day starts. Each person chooses what they see in each part.</p>
-        <div id="parts"></div>
-      </section>
+        <section aria-labelledby="parts-title">
+          <h2 id="parts-title">Parts of the day</h2>
+          <p class="hint">When each part of the day starts. Each person chooses what they see in each part.</p>
+          <div id="parts"></div>
+        </section>
       </div>
 
       <p id="saved" class="saved" role="status"></p>

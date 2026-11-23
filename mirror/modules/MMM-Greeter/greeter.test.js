@@ -10,7 +10,7 @@ const { test } = require("node:test");
  * @param {object} config options laid over the module's defaults
  * @returns {object} the module instance
  */
-function load (file, config) {
+const load = (file, config) => {
 	let definition;
 	global.Module = { register: (name, value) => { definition = value; } };
 	global.Log = { warn () {}, log () {} };
@@ -24,7 +24,7 @@ function load (file, config) {
 	instance.updateDom = () => {};
 	instance.hidden = false;
 	return instance;
-}
+};
 
 const greeter = (config = {}) => {
 	const instance = load(path.join(__dirname, "MMM-Greeter.js"), {

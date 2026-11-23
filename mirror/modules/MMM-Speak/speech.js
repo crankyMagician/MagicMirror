@@ -9,6 +9,8 @@ const crypto = require("node:crypto");
  * @returns {string} the text to speak, or "" when there is nothing to say
  */
 const prepare = (text, maxCharacters) => {
+	// Control characters are exactly what this removes.
+	// eslint-disable-next-line no-control-regex
 	const clean = String(text || "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
 	if (clean.length <= maxCharacters) {
 		return clean;
@@ -27,6 +29,10 @@ const prepare = (text, maxCharacters) => {
  * Names the cache file for one utterance. The same words in the same voice
  * always give the same name, so a repeated phrase is fetched once.
  * @param {object} voice the voice id, model and audio format in use
+ * @param {string} voice.provider the speech provider's name
+ * @param {string} voice.voiceId the voice in that provider's account
+ * @param {string} voice.model the provider's model
+ * @param {string} voice.format the audio format
  * @param {string} text the prepared text
  * @returns {string} a file name
  */
@@ -117,7 +123,7 @@ const speakerBusy = (error) => (/device or resource busy/i).test(String(error &&
 
 /**
  * Runs an action again while it fails for a reason worth waiting out.
- * @param {Function} action returns a promise
+ * @param {function(): Promise} action what to run
  * @param {object} options how to retry
  * @param {number} options.attempts the most times to run the action
  * @param {number} options.waitMs the pause between attempts
