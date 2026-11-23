@@ -42,16 +42,17 @@ const googleTasks = (person, account, header, feature) => ({
 	}
 });
 // A framed photo from the person's own folder, filled from Google Photos on
-// the settings page. It changes every 20 seconds.
+// the settings page. It changes every 20 seconds. It sits in the right
+// column, between the network card and the Pokémon of the day.
 const photoFrame = (person) => ({
 	module: "MMM-ImagesPhotos",
 	classes: text(person, " feature-photos"),
-	position: "lower_third",
+	position: "bottom_right",
 	config: {
 		path: text(dataDir, "/photos/", person),
 		updateInterval: 20 * 1000,
 		maxWidth: "380px",
-		maxHeight: "380px",
+		maxHeight: "300px",
 		opacity: 1
 	}
 });
