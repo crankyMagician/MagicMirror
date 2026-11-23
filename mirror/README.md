@@ -186,7 +186,27 @@ The **Mirror** tab beside the names holds what belongs to the mirror and the roo
 
 Changes save as they are made and apply on the mirror within a second. They are stored in `~/mirror-data/profiles.json` on the Pi, people under `people` and the mirror's own settings under `mirror`. A file from before the Mirror tab existed is read as it is: quiet hours that a person had switched on become the mirror's.
 
-The page has no login. `settingsAllow` in the module's config limits it to the home subnets, and anyone on those can change these preferences.
+The page answers only to the mirror's own names (`settingsHosts`, plus `login.host`) and to bare addresses. A page on another site that points a name of its own at the mirror's address is refused with 421.
+
+#### Login
+
+Out of the box the page has no login. `settingsAllow` in the module's config limits it to the home subnets, and anyone on those can change these preferences.
+
+With the household's login server configured, the page and everything under `/api` and `/unifi` need a signed-in account. Three values in `config.env` switch it on:
+
+```sh
+MIRROR_AUTH_URL=https://auth.home.example
+MIRROR_SETTINGS_HOST=mirror.home.example
+MIRROR_ACCOUNTS='{"someone@example.org": "sam", "partner@example.org": "heather"}'
+```
+
+- The login server sets a cookie for the whole home domain when someone signs in. The browser sends it to the mirror too, and the mirror asks the login server whose it is (`GET /api/v1/auth/me`). The mirror holds no secret of the login server. An answer is reused for a minute.
+- Only an account listed in `MIRROR_ACCOUNTS` gets in, and the page opens on that person's settings. Any other signed-in account is told it is not one of the mirror's people.
+- People open `https://MIRROR_SETTINGS_HOST/`. Opened at a bare address, the page only points there, because the cookie belongs to that name.
+- The sign-in form on the page sends the password straight to the login server and never to the mirror. A sign-in lasts an hour and the page renews it without asking.
+- If the login server does not answer, the page is closed until it does. The mirror itself keeps running. Requests made on the Pi itself (`curl http://localhost:8081/...` over SSH) need no login, which is the way back in.
+
+`mirror/lib/household-login.js` is the check. It assumes two things about the login server: the session cookie's name (`login.cookie`, `household_auth` by default) and that `/api/v1/auth/me` answers 200 with `data.user.email` for a live session and 401 otherwise.
 
 The page has a port of its own (8081). MagicMirror itself answers only on the Pi (`address: "localhost"`), because third-party modules often trust whatever reaches MagicMirror's socket and routes.
 

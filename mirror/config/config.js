@@ -101,6 +101,13 @@ const config = {
 				// The settings page: http://mirror.local:8081/ from the home network.
 				settingsPort: 8081,
 				settingsAllow: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
+				// The household login server. Empty values in config.env leave the
+				// page without login, guarded by the network filter alone.
+				login: {
+					authUrl: process.env.MIRROR_AUTH_URL || "",
+					host: process.env.MIRROR_SETTINGS_HOST || "",
+					accounts: JSON.parse(process.env.MIRROR_ACCOUNTS || "{}")
+				},
 				// Heather's frame shows a weekly set of paintings from The Met.
 				artFeeds: { heather: "https://crankymagician.github.io/tv-art/mirror/feed.json" },
 				// Names on the settings page for the third-party modules below.

@@ -6,6 +6,7 @@ const readline = require("node:readline");
 const express = require("express");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
+const { createLogin, hostAllowed } = require("../../lib/household-login");
 const { ProfileStore, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
 const { addUniFiRoutes } = require("./unifi-routes");
 const { addPhotoRoutes } = require("./photos-routes");
@@ -16,7 +17,7 @@ const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
 const PROFILES_FILE = path.join(DATA_DIR, "profiles.json");
 
 // Options the helper needs before the browser sends its config.
-const SERVER_DEFAULTS = { settingsPort: 8081, settingsAllow: ["127.0.0.1", "::1"] };
+const SERVER_DEFAULTS = { settingsPort: 8081, settingsAllow: ["127.0.0.1", "::1"], settingsHosts: ["localhost", "mirror", "mirror.local"], login: {} };
 
 module.exports = NodeHelper.create({
 	start () {
@@ -61,14 +62,53 @@ module.exports = NodeHelper.create({
 		const app = express();
 		app.disable("x-powered-by");
 		app.use(ipAccessControl(options.settingsAllow, []));
+
+		// The page answers only to the mirror's own names and to bare
+		// addresses. A page elsewhere that points its own name at the mirror
+		// is refused, whatever address its visitor comes from.
+		const loginOptions = options.login || {};
+		const hosts = [...options.settingsHosts, ...(loginOptions.host ? [loginOptions.host] : [])];
+		app.use((req, res, next) => {
+			if (!hostAllowed(req.headers.host, hosts)) {
+				res.status(421).json({ error: "That is not one of the mirror's names" });
+				return;
+			}
+			next();
+		});
+
+		// With a login server configured, the page talks to it from the browser.
+		const login = createLogin({ authUrl: loginOptions.authUrl, cookie: loginOptions.cookie || "household_auth", accounts: loginOptions.accounts });
+		const authOrigin = login.enabled ? new URL(login.authUrl).origin : "";
+		const policy = login.enabled ? `default-src 'self'; connect-src 'self' ${authOrigin}` : "default-src 'self'";
 		app.use((req, res, next) => {
 			res.set({
-				"Content-Security-Policy": "default-src 'self'",
+				"Content-Security-Policy": policy,
 				"X-Content-Type-Options": "nosniff",
 				"Referrer-Policy": "no-referrer"
 			});
 			next();
 		});
+
+		// Says whether login is on and who is signed in. It is the one address
+		// under /api that needs no login, so the page can decide what to show.
+		app.get("/api/session", async (req, res) => {
+			const who = await login.identify(req);
+			res.set("Cache-Control", "no-store");
+			res.json({
+				login: login.enabled,
+				signedIn: who.status === 200,
+				refused: who.status === 403,
+				problem: who.status === 200 ? null : who.error,
+				email: who.email || null,
+				person: who.person || null,
+				authUrl: login.enabled ? login.authUrl : null,
+				home: login.enabled && loginOptions.host ? `https://${loginOptions.host}/` : null
+			});
+		});
+		if (login.enabled) {
+			Log.log(`The settings page asks ${authOrigin} who is signed in`);
+			app.use(["/api", "/unifi"], login.middleware);
+		}
 		this.addRoutes(app);
 		addUniFiRoutes(app, { port: global.config.port || 8080, basePath: global.config.basePath || "/" });
 		this.settingsServer = app.listen(options.settingsPort, "0.0.0.0", () => {
@@ -108,6 +148,8 @@ module.exports = NodeHelper.create({
 		};
 
 		app.get("/", (req, res) => res.sendFile(path.join(publicDir, "settings.html")));
+		// The login server sends a person here after signing in with Google.
+		app.get("/login", (req, res) => res.sendFile(path.join(publicDir, "settings.html")));
 		app.use(express.static(publicDir, { index: false }));
 
 		app.get("/api/status", (req, res) => {

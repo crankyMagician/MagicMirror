@@ -261,3 +261,49 @@ input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Login: who is signed in, and the sign-in form. */
+.account {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+}
+
+#signin-google,
+#signin-home,
+#signin-form button {
+  display: block;
+  width: 100%;
+  margin: 0.6rem 0;
+  padding: 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+#signin-form input {
+  min-width: 0;
+  flex: 1;
+  max-width: 16rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
