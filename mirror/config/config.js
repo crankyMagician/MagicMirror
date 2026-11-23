@@ -25,6 +25,8 @@ const googleCalendar = (person, account, header, feature) => ({
 	config: {
 		...googleAccount(account),
 		maximumEntries: 4,
+		// MMM-Briefing reads the events to answer "what is next".
+		broadcastEvents: true,
 		calendars: [{ symbol: "calendar-check", calendarID: "primary" }]
 	}
 });
@@ -126,6 +128,16 @@ const config = {
 			// "mirror, show the calendar", "mirror, hide news". It draws nothing.
 			module: "MMM-Voice",
 			config: {
+				// Command -> the phrases that trigger it, after the wake word.
+				// MMM-Household acts on the first two and MMM-Briefing answers
+				// the rest aloud.
+				commands: {
+					wake_up: ["wake up"],
+					good_night: ["good night"],
+					good_morning: ["good morning"],
+					weather: ["what is the weather", "how is the weather"],
+					what_is_next: ["what is next", "what is on my calendar"]
+				},
 				// Spoken name -> feature, for "show NAME" and "hide NAME".
 				features: {
 					calendar: "calendar",
@@ -232,6 +244,20 @@ const config = {
 				// [{"title": "...", "targetTime": "2026-12-25", "repeat": "yearly", "unit": "day"}]
 				// MagicMirror loads config.env before evaluating this server config.
 				events: JSON.parse(process.env.MIRROR_EVENTS || "[]")
+			}
+		},
+		{
+			// Spoken answers ("mirror, good morning", "mirror, what is next")
+			// and a special message on special days. The days are private and
+			// live in config.env.
+			module: "MMM-Briefing",
+			position: "middle_center",
+			config: {
+				people: {
+					sam: { name: "Sam" },
+					heather: { name: "Heather" }
+				},
+				specialDays: JSON.parse(process.env.MIRROR_SPECIAL_DAYS || "[]")
 			}
 		},
 		{

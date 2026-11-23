@@ -16,6 +16,9 @@
  *
  * mirror/tools/google-connect.py creates the token file. Until it exists the
  * module says a sign-in is needed and keeps checking.
+ *
+ * Each update is also broadcast to other modules as HOUSEHOLD_TASKS
+ * { tasks: [{ title, due, list }] }.
  */
 Module.register("MMM-HouseholdTasks", {
 	defaults: {
@@ -58,6 +61,8 @@ Module.register("MMM-HouseholdTasks", {
 		if (notification === "TASKS") {
 			this.tasks = payload.tasks;
 			this.problem = null;
+			// For modules that speak or summarize, such as MMM-Briefing.
+			this.sendNotification("HOUSEHOLD_TASKS", { tasks: payload.tasks });
 		} else if (notification === "TASKS_ERROR") {
 			this.problem = payload.signIn ? "Sign in to Google to show these tasks" : "Tasks are not available right now";
 		}

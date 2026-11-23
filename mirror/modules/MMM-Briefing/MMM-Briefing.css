@@ -1,0 +1,10 @@
+.MMM-Briefing .briefing-special {
+  max-width: 28em;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.MMM-Briefing .briefing-special p {
+  margin: 0 0 0.4em;
+  line-height: 1.3;
+}
