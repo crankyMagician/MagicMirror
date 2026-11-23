@@ -19,6 +19,19 @@ const DEFAULT_BLOCKS = [
 ];
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+// A voice is named by its id in MMM-Speak's list. "" means no choice.
+const VOICE_PATTERN = /^[a-z0-9-]{0,48}$/;
+const DEFAULT_SPEECH = { voice: "", volume: 100, speak: true };
+
+const validVolume = (value) => Number.isInteger(value) && value >= 0 && value <= 100;
+
+/**
+ * Checks a submitted voice id.
+ * @param {unknown} voice the submitted value
+ * @param {string[]} [voiceIds] the ids on offer, when known
+ * @returns {boolean} true for "" and for a known id
+ */
+const knownVoice = (voice, voiceIds) => typeof voice === "string" && VOICE_PATTERN.test(voice) && (voice === "" || !voiceIds || voiceIds.includes(voice));
 
 const toMinutes = (time) => {
 	const [hours, minutes] = time.split(":").map(Number);
@@ -66,10 +79,15 @@ const inRange = (from, to, date) => {
 
 const defaultProfile = (featureKeys, blocks) => ({
 	theme: "dark",
-	blocks: Object.fromEntries(blocks.map((block) => [block.key, Object.fromEntries(featureKeys.map((key) => [key, true]))]))
+	blocks: Object.fromEntries(blocks.map((block) => [block.key, Object.fromEntries(featureKeys.map((key) => [key, true]))])),
+	// How the mirror speaks to this person. An empty voice is the mirror's own.
+	speech: { ...DEFAULT_SPEECH }
 });
 
 const defaultMirror = () => ({
+	// The voice for guests and for anyone who has not chosen one. "" is the
+	// voice named in MMM-Speak's config.
+	voice: "",
 	quietHours: { enabled: false, from: "23:00", to: "06:00" },
 	blocks: DEFAULT_BLOCKS.map((block) => ({ ...block }))
 });
@@ -102,6 +120,9 @@ const normalizeMirror = (input) => {
 	const mirror = defaultMirror();
 	const source = input && typeof input === "object" ? input : {};
 	mirror.quietHours = readQuietHours(source.quietHours, mirror.quietHours);
+	if (knownVoice(source.voice)) {
+		mirror.voice = source.voice;
+	}
 	if (Array.isArray(source.blocks)) {
 		const blocks = mirror.blocks.map((block) => {
 			const stored = source.blocks.find((entry) => entry && entry.key === block.key);
@@ -117,11 +138,15 @@ const normalizeMirror = (input) => {
 /**
  * Checks submitted mirror settings strictly.
  * @param {object} input the submitted settings
+ * @param {string[]} [voiceIds] the voices on offer
  * @returns {string|null} a message describing the first problem, or null
  */
-const problemWithMirror = (input) => {
+const problemWithMirror = (input, voiceIds) => {
 	if (!input || typeof input !== "object" || Array.isArray(input)) {
 		return "The mirror settings must be an object";
+	}
+	if (input.voice !== undefined && !knownVoice(input.voice, voiceIds)) {
+		return "voice must be one of the voices on offer";
 	}
 	const quiet = input.quietHours;
 	if (!quiet || typeof quiet !== "object" || typeof quiet.enabled !== "boolean") {
@@ -174,6 +199,18 @@ const normalize = (input, featureKeys, blocks) => {
 			}
 		}
 	}
+	const speech = source.speech;
+	if (speech && typeof speech === "object") {
+		if (knownVoice(speech.voice)) {
+			profile.speech.voice = speech.voice;
+		}
+		if (validVolume(speech.volume)) {
+			profile.speech.volume = speech.volume;
+		}
+		if (typeof speech.speak === "boolean") {
+			profile.speech.speak = speech.speak;
+		}
+	}
 	return profile;
 };
 
@@ -184,9 +221,10 @@ const normalize = (input, featureKeys, blocks) => {
  * @param {object} input the submitted profile
  * @param {string[]} featureKeys the features this person can toggle
  * @param {object[]} blocks the day's blocks
+ * @param {string[]} [voiceIds] the voices on offer
  * @returns {string|null} a message describing the first problem, or null
  */
-const problemWith = (input, featureKeys, blocks) => {
+const problemWith = (input, featureKeys, blocks, voiceIds) => {
 	if (!input || typeof input !== "object" || Array.isArray(input)) {
 		return "The profile must be an object";
 	}
@@ -213,6 +251,21 @@ const problemWith = (input, featureKeys, blocks) => {
 			}
 		}
 	}
+	const speech = input.speech;
+	if (speech !== undefined) {
+		if (!speech || typeof speech !== "object") {
+			return "speech must be an object";
+		}
+		if (!knownVoice(speech.voice, voiceIds)) {
+			return "speech.voice must be one of the voices on offer";
+		}
+		if (!validVolume(speech.volume)) {
+			return "speech.volume must be a whole number from 0 to 100";
+		}
+		if (typeof speech.speak !== "boolean") {
+			return "speech.speak must be true or false";
+		}
+	}
 	return null;
 };
 
@@ -224,15 +277,17 @@ const problemWith = (input, featureKeys, blocks) => {
  * @param {object|null} state.profile that person's profile, or null for a guest or nobody
  * @param {object[]} state.blocks the day's blocks
  * @param {object} [state.quietHours] the mirror's quiet hours: enabled, from and to
+ * @param {string} [state.mirrorVoice] the mirror's default voice id
  * @param {number} [state.wakeUntil] time in ms until which a spoken "wake up" keeps the mirror on
  * @param {string|null} [state.asleep] the person who said "good night" and is still there
  * @param {object} [state.overrides] features switched by voice, by feature key
  * @param {Date} now the current time
- * @returns {object} who the view is for, the block of the day and the feature switches
+ * @returns {object} who the view is for, the block of the day, the feature switches and how to speak
  */
-const viewFor = ({ person, unknown, profile, blocks, quietHours = null, wakeUntil = 0, asleep = null, overrides = {} }, now) => {
+const viewFor = ({ person, unknown, profile, blocks, quietHours = null, mirrorVoice = "", wakeUntil = 0, asleep = null, overrides = {} }, now) => {
 	const block = currentBlock(blocks, now).key;
-	const view = { person: person || null, unknown: Boolean(unknown), quiet: false, block, features: null, theme: "dark" };
+	// Until a person with a voice of their own is seen, the mirror speaks in its own.
+	const view = { person: person || null, unknown: Boolean(unknown), quiet: false, block, features: null, theme: "dark", speech: { ...DEFAULT_SPEECH, voice: mirrorVoice } };
 	const woken = wakeUntil > now.getTime();
 
 	if (view.person && asleep === view.person) {
@@ -250,6 +305,7 @@ const viewFor = ({ person, unknown, profile, blocks, quietHours = null, wakeUnti
 	if (view.person && profile) {
 		view.features = { ...profile.blocks[block] };
 		view.theme = profile.theme === "light" ? "light" : "dark";
+		view.speech = { ...profile.speech, voice: profile.speech.voice || mirrorVoice };
 	}
 	if (view.person && Object.keys(overrides).length > 0) {
 		view.features = { ...(view.features || {}), ...overrides };
@@ -306,4 +362,4 @@ class ProfileStore {
 	}
 }
 
-module.exports = { DEFAULT_BLOCKS, ProfileStore, currentBlock, defaultMirror, defaultProfile, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor };
+module.exports = { DEFAULT_BLOCKS, DEFAULT_SPEECH, ProfileStore, currentBlock, defaultMirror, defaultProfile, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor };

@@ -213,3 +213,76 @@ test("a signed-in person sees their own settings and a way to sign out", async (
 	assert.match(document.getElementById("account").textContent, /Signed in as heather@example\.org/);
 	assert.equal(document.querySelectorAll("#people button")[1].getAttribute("aria-pressed"), "true");
 });
+
+test("each person chooses a voice, a volume and whether to be spoken to, and the mirror has a voice for guests", async (t) => {
+	const people = ["sam", "heather"];
+	const profiles = Object.fromEntries(people.map((name) => [name, defaultProfile(["clock"], DEFAULT_BLOCKS)]));
+	profiles.heather.speech = { voice: "julia", volume: 60, speak: true };
+	const voices = [{ id: "katie", name: "Katie", about: "Bright and upbeat." }, { id: "julia", name: "Julia", about: "British." }];
+	const state = { people, profiles, voices, blocks: DEFAULT_BLOCKS, mirror: defaultMirror(), features: [{ key: "clock", label: "Clock", owners: [] }], enrolled: [], now: { camera: false, block: "day" } };
+	const dom = new JSDOM(fs.readFileSync(path.join(__dirname, "public/settings.html"), "utf8"), { url: "http://mirror.test", runScripts: "outside-only" });
+	t.after(() => dom.window.close());
+	dom.window.structuredClone = structuredClone;
+	const saved = [];
+	dom.window.fetch = (url, options) => {
+		if (!options?.method) {
+			return Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(state)) });
+		}
+		const body = JSON.parse(options.body);
+		saved.push({ url, body });
+		return Promise.resolve({ ok: true, json: () => Promise.resolve(url === "/api/mirror" ? { mirror: body } : { profile: body }) });
+	};
+	dom.window.eval(fs.readFileSync(path.join(__dirname, "public/settings.js"), "utf8"));
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	const document = dom.window.document;
+	const change = (element) => element.dispatchEvent(new dom.window.Event("change"));
+
+	// Sam has not chosen: the menu shows the mirror's voice first, then the list.
+	assert.equal(document.getElementById("voice-section").hidden, false);
+	const menu = document.getElementById("voice");
+	assert.deepEqual([...menu.options].map((option) => option.textContent), ["The mirror's voice", "Katie", "Julia"]);
+	assert.equal(menu.value, "");
+	assert.equal(document.getElementById("voice-volume").value, "100");
+	assert.equal(document.getElementById("voice-speak").checked, true);
+
+	menu.value = "katie";
+	change(menu);
+	assert.equal(document.getElementById("voice-about").textContent, "Bright and upbeat.");
+	document.getElementById("voice-volume").value = "40";
+	change(document.getElementById("voice-volume"));
+	document.getElementById("voice-speak").checked = false;
+	change(document.getElementById("voice-speak"));
+	await new Promise((resolve) => setTimeout(resolve, 450));
+	assert.deepEqual(saved.at(-1).body.speech, { voice: "katie", volume: 40, speak: false });
+	assert.equal(saved.at(-1).url, "/api/profiles/sam");
+
+	// Heather's own choice shows on her page.
+	document.querySelectorAll("#people button")[1].click();
+	assert.equal(document.getElementById("voice").value, "julia");
+	assert.equal(document.getElementById("voice-volume").value, "60");
+	assert.equal(document.getElementById("voice-about").textContent, "British.");
+
+	// The mirror's voice is on the Mirror tab and is saved with the mirror.
+	document.querySelectorAll("#people button")[2].click();
+	const mirrorMenu = document.getElementById("mirror-voice");
+	assert.equal(document.getElementById("mirror-voice-section").hidden, false);
+	assert.equal(mirrorMenu.options[0].textContent, "The built-in voice");
+	mirrorMenu.value = "julia";
+	change(mirrorMenu);
+	await new Promise((resolve) => setTimeout(resolve, 450));
+	assert.equal(saved.at(-1).url, "/api/mirror");
+	assert.equal(saved.at(-1).body.voice, "julia");
+});
+
+test("with no voices on offer the voice sections stay hidden", async (t) => {
+	const people = ["sam"];
+	const state = { people, profiles: { sam: defaultProfile(["clock"], DEFAULT_BLOCKS) }, blocks: DEFAULT_BLOCKS, mirror: defaultMirror(), features: [{ key: "clock", label: "Clock", owners: [] }], enrolled: [], now: { camera: false, block: "day" } };
+	const dom = new JSDOM(fs.readFileSync(path.join(__dirname, "public/settings.html"), "utf8"), { url: "http://mirror.test", runScripts: "outside-only" });
+	t.after(() => dom.window.close());
+	dom.window.structuredClone = structuredClone;
+	dom.window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(state)) });
+	dom.window.eval(fs.readFileSync(path.join(__dirname, "public/settings.js"), "utf8"));
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.equal(dom.window.document.getElementById("voice-section").hidden, true);
+	assert.equal(dom.window.document.getElementById("mirror-voice-section").hidden, true);
+});

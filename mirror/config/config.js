@@ -279,7 +279,20 @@ const config = {
 			module: "MMM-Speak",
 			config: {
 				provider: "${MIRROR_SPEECH_PROVIDER}",
-				voiceId: "${MIRROR_SPEECH_VOICE}"
+				voiceId: "${MIRROR_SPEECH_VOICE}",
+				// Voices each person can choose on the settings page. The two
+				// values above are the built-in voice, used until someone chooses.
+				voices: [
+					{ id: "katie", name: "Katie", about: "Bright and upbeat.", provider: "cartesia", voiceId: "f786b574-daa5-4673-aa0c-cbe3e8534c02" },
+					{ id: "lily", name: "Lily", about: "Casual and friendly.", provider: "cartesia", voiceId: "dda51133-5d43-4a3b-84e6-e68c13f60cba" },
+					{ id: "layla", name: "Layla", about: "Casual and relaxed.", provider: "cartesia", voiceId: "999df508-4de5-40a7-8bd3-8c12f678c284" },
+					{ id: "mason", name: "Mason", about: "Casual, a man's voice.", provider: "cartesia", voiceId: "b58b6b46-1a27-46ba-8648-bc203a5d394e" },
+					{ id: "julia", name: "Julia", about: "British.", provider: "cartesia", voiceId: "273f9ef7-9fc2-4def-88bb-ab108c6249ca" },
+					{ id: "archie", name: "Archie", about: "British, a man's voice.", provider: "cartesia", voiceId: "ef191366-f52f-447a-a398-ed8c0f2943a1" },
+					{ id: "celine", name: "Celine", about: "Soft and soothing.", provider: "cartesia", voiceId: "ca566b43-944e-4474-b494-7d9f0695f307" },
+					{ id: "romeo", name: "Romeo", about: "Deep and soothing.", provider: "cartesia", voiceId: "f688c0a6-dddd-48ba-8246-c099d494a162" },
+					{ id: "wade", name: "Wade", about: "Playful.", provider: "cartesia", voiceId: "fbf7d2ec-ebea-49f2-8889-a482b9b0a7ed" }
+				]
 			}
 		},
 		{

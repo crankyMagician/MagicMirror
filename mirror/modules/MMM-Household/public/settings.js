@@ -267,6 +267,77 @@
 		$("parts").replaceChildren(...rows);
 	};
 
+	// Fills a voice menu. The first entry stands for "no choice of my own".
+	const fillVoices = (select, firstLabel, chosen) => {
+		const options = [el("option", { value: "", textContent: firstLabel })];
+		(data.voices || []).forEach((voice) => options.push(el("option", { value: voice.id, textContent: voice.name })));
+		select.replaceChildren(...options);
+		select.value = options.some((option) => option.value === chosen) ? chosen : "";
+	};
+
+	const aboutVoice = (id) => {
+		const voice = (data.voices || []).find((entry) => entry.id === id);
+		return voice ? voice.about : "";
+	};
+
+	const renderVoice = () => {
+		const offered = (data.voices || []).length > 0;
+		$("voice-section").hidden = !offered;
+		$("mirror-voice-section").hidden = !offered;
+		if (!offered) {
+			return;
+		}
+		const speech = data.profiles[person].speech || { voice: "", volume: 100, speak: true };
+		fillVoices($("voice"), "The mirror's voice", speech.voice);
+		$("voice-about").textContent = aboutVoice(speech.voice);
+		$("voice-volume").value = String(speech.volume);
+		$("voice-speak").checked = speech.speak !== false;
+		fillVoices($("mirror-voice"), "The built-in voice", data.mirror.voice || "");
+	};
+
+	// Plays a sample in the browser. The mirror itself stays silent.
+	const hear = async (id, note) => {
+		note.textContent = "Fetching the sample";
+		try {
+			const response = await fetch(`${API}/voices/${encodeURIComponent(id || "default")}/preview`);
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				throw new Error(body.error || "The sample is not available");
+			}
+			const sound = new Audio(URL.createObjectURL(await response.blob()));
+			await sound.play();
+			note.textContent = "";
+		} catch (error) {
+			note.textContent = error.message;
+		}
+	};
+
+	const bindVoice = () => {
+		const mine = () => {
+			data.profiles[person].speech = data.profiles[person].speech || { voice: "", volume: 100, speak: true };
+			return data.profiles[person].speech;
+		};
+		$("voice").addEventListener("change", (event) => {
+			mine().voice = event.target.value;
+			$("voice-about").textContent = aboutVoice(event.target.value);
+			save();
+		});
+		$("voice-volume").addEventListener("change", (event) => {
+			mine().volume = Number(event.target.value);
+			save();
+		});
+		$("voice-speak").addEventListener("change", (event) => {
+			mine().speak = event.target.checked;
+			save();
+		});
+		$("voice-hear").addEventListener("click", () => hear($("voice").value || data.mirror.voice, $("voice-note")));
+		$("mirror-voice").addEventListener("change", (event) => {
+			data.mirror.voice = event.target.value;
+			saveMirror();
+		});
+		$("mirror-voice-hear").addEventListener("click", () => hear($("mirror-voice").value, $("mirror-voice-note")));
+	};
+
 	const renderFace = () => {
 		const known = data.enrolled.includes(person);
 		$("face-state").textContent = known
@@ -344,6 +415,7 @@
 		renderGrid();
 		renderQuiet();
 		renderParts();
+		renderVoice();
 		renderFace();
 		photos = { count: 0, picking: false, note: "" };
 		renderPhotos();
@@ -502,6 +574,7 @@
 			save();
 		});
 		bindQuiet();
+		bindVoice();
 		bindEnroll();
 		bindPhotos();
 		render();

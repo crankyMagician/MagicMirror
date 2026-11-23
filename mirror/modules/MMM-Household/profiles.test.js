@@ -233,3 +233,53 @@ test("a version 1 file with no quiet hours switched on leaves the mirror's off",
 	assert.equal(new ProfileStore(file).getMirror().quietHours.enabled, false);
 	fs.rmSync(directory, { recursive: true });
 });
+
+test("a profile carries how the mirror speaks to that person", () => {
+	const fresh = normalize(undefined, FEATURES, DEFAULT_BLOCKS);
+	assert.deepEqual(fresh.speech, { voice: "", volume: 100, speak: true });
+	const kept = normalize({ speech: { voice: "julia", volume: 40, speak: false } }, FEATURES, DEFAULT_BLOCKS);
+	assert.deepEqual(kept.speech, { voice: "julia", volume: 40, speak: false });
+	// Stored nonsense falls back field by field.
+	const mended = normalize({ speech: { voice: "Not An Id!", volume: 250, speak: "yes" } }, FEATURES, DEFAULT_BLOCKS);
+	assert.deepEqual(mended.speech, { voice: "", volume: 100, speak: true });
+});
+
+test("problemWith checks a submitted voice against the voices on offer", () => {
+	const voices = ["julia", "katie"];
+	const speech = (changes) => ({ blocks: {}, speech: { voice: "julia", volume: 80, speak: true, ...changes } });
+	assert.equal(problemWith(speech({}), FEATURES, DEFAULT_BLOCKS, voices), null);
+	assert.equal(problemWith(speech({ voice: "" }), FEATURES, DEFAULT_BLOCKS, voices), null);
+	assert.match(problemWith(speech({ voice: "romeo" }), FEATURES, DEFAULT_BLOCKS, voices), /voices on offer/);
+	assert.match(problemWith(speech({ volume: 101 }), FEATURES, DEFAULT_BLOCKS, voices), /0 to 100/);
+	assert.match(problemWith(speech({ volume: 12.5 }), FEATURES, DEFAULT_BLOCKS, voices), /whole number/);
+	assert.match(problemWith(speech({ speak: "no" }), FEATURES, DEFAULT_BLOCKS, voices), /true or false/);
+	assert.match(problemWith({ blocks: {}, speech: "loud" }, FEATURES, DEFAULT_BLOCKS, voices), /must be an object/);
+	// A page from before voices existed sends no speech at all.
+	assert.equal(problemWith({ blocks: {} }, FEATURES, DEFAULT_BLOCKS, voices), null);
+});
+
+test("the mirror has a voice of its own for guests", () => {
+	assert.equal(defaultMirror().voice, "");
+	assert.equal(normalizeMirror({ voice: "katie" }).voice, "katie");
+	assert.equal(normalizeMirror({ voice: 7 }).voice, "");
+	const good = { ...defaultMirror(), voice: "katie" };
+	assert.equal(problemWithMirror(good, ["katie"]), null);
+	assert.match(problemWithMirror({ ...good, voice: "romeo" }, ["katie"]), /voices on offer/);
+	// Without a voice in the request the rest is still checked as before.
+	const { voice, ...older } = good;
+	assert.equal(voice, "katie");
+	assert.equal(problemWithMirror(older, ["katie"]), null);
+});
+
+test("viewFor says how to speak: the person's own voice, or the mirror's", () => {
+	const chosen = profileOf({ speech: { voice: "julia", volume: 60, speak: true } });
+	assert.deepEqual(viewFor(state({ profile: chosen, mirrorVoice: "katie" }), at("12:00")).speech, { voice: "julia", volume: 60, speak: true });
+	// No choice of their own: the mirror's voice, at their volume.
+	const unchosen = profileOf({ speech: { voice: "", volume: 30, speak: false } });
+	assert.deepEqual(viewFor(state({ profile: unchosen, mirrorVoice: "katie" }), at("12:00")).speech, { voice: "katie", volume: 30, speak: false });
+	// A guest, nobody at all, and a person in quiet hours get the mirror's voice.
+	const guest = viewFor({ person: "guest", unknown: false, profile: null, blocks: DEFAULT_BLOCKS, mirrorVoice: "katie" }, at("12:00"));
+	assert.deepEqual(guest.speech, { voice: "katie", volume: 100, speak: true });
+	assert.deepEqual(viewFor({ person: null, unknown: false, profile: null, blocks: DEFAULT_BLOCKS }, at("12:00")).speech, { voice: "", volume: 100, speak: true });
+	assert.deepEqual(viewFor(state({ profile: chosen, mirrorVoice: "katie", quietHours: QUIET }), at("23:30")).speech, { voice: "katie", volume: 100, speak: true });
+});

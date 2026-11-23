@@ -7,8 +7,11 @@ const express = require("express");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
 const { createLogin, hostAllowed, mayActFor, ownOnly } = require("../../lib/household-login");
+const { DEFAULTS: SPEAK_DEFAULTS } = require("../MMM-Speak/speech");
+const { createSynth } = require("../MMM-Speak/synth");
 const { ProfileStore, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
 const { addUniFiRoutes } = require("./unifi-routes");
+const { addVoiceRoutes, voicesOn } = require("./voice-routes");
 const { addPhotoRoutes } = require("./photos-routes");
 const { addArtRoutes } = require("./art-feed");
 
@@ -169,6 +172,7 @@ module.exports = NodeHelper.create({
 				enrolled: this.enrolled,
 				blocks: this.blocks,
 				mirror: this.mirror,
+				voices: voicesOn(this.speakConfig()),
 				features: this.features,
 				profiles: Object.fromEntries(people.map((name) => [name, this.profileOf(name)])),
 				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, theme: view.theme, screenOn: this.screenOn, camera: this.presence !== null }
@@ -181,7 +185,7 @@ module.exports = NodeHelper.create({
 				res.status(404).json({ error: "Nobody on this mirror has that name" });
 				return;
 			}
-			const problem = problemWith(req.body, this.featureKeysFor(name), this.blocks);
+			const problem = problemWith(req.body, this.featureKeysFor(name), this.blocks, this.voiceIds());
 			if (problem) {
 				res.status(400).json({ error: problem });
 				return;
@@ -200,13 +204,14 @@ module.exports = NodeHelper.create({
 		});
 
 		app.put("/api/mirror", jsonOnly, json, (req, res) => {
-			const problem = problemWithMirror(req.body);
+			const problem = problemWithMirror(req.body, this.voiceIds());
 			if (problem) {
 				res.status(400).json({ error: problem });
 				return;
 			}
 			try {
-				this.store.setMirror(req.body);
+				// A page from before the mirror had a voice does not send one. Keep it.
+				this.store.setMirror({ voice: this.mirror.voice, ...req.body });
 			} catch (error) {
 				Log.error(`Could not save the mirror settings: ${error.message}`);
 				res.status(500).json({ error: "The mirror could not save that" });
@@ -241,6 +246,13 @@ module.exports = NodeHelper.create({
 			photosDir: path.join(DATA_DIR, "photos"),
 			guards: [jsonOnly, json],
 			own: ownOnly((req) => req.params.person),
+			log: Log
+		});
+
+		// A short sample of each voice, for choosing one on the page.
+		addVoiceRoutes(app, {
+			speakConfig: () => this.speakConfig(),
+			synth: createSynth({ cacheDir: path.join(DATA_DIR, "speech"), log: Log }),
 			log: Log
 		});
 
@@ -307,6 +319,19 @@ module.exports = NodeHelper.create({
 	},
 
 	/**
+	 * Reads MMM-Speak's config, which holds the voices people can choose.
+	 * @returns {object} its config over its defaults, or the defaults alone without the module
+	 */
+	speakConfig () {
+		const entry = (global.config.modules || []).find((module) => module.module === "MMM-Speak" && !module.disabled);
+		return { ...SPEAK_DEFAULTS, ...(entry && entry.config) };
+	},
+
+	voiceIds () {
+		return voicesOn(this.speakConfig()).map((voice) => voice.id);
+	},
+
+	/**
 	 * Lists the features one person can switch on and off: the shared ones and
 	 * their own.
 	 * @param {string} name a person on this mirror
@@ -333,6 +358,7 @@ module.exports = NodeHelper.create({
 			profile: hasProfile ? this.profileOf(this.person) : null,
 			blocks: this.blocks,
 			quietHours: this.mirror.quietHours,
+			mirrorVoice: this.mirror.voice,
 			wakeUntil: this.wakeUntil,
 			asleep: this.asleep,
 			overrides: this.overrides

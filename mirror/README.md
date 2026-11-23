@@ -65,6 +65,14 @@ The directory has no module for either service. `MMM-GoogleTTS` gave the `TTS_SA
 
 Do not play a recording of a command phrase through the speaker by hand. The mirror hears it and obeys.
 
+### A voice for each person
+
+`voices` in `MMM-Speak`'s config lists the voices people can choose from, each with an `id`, a `name`, a line `about` it, and the provider's `provider` and `voiceId`. The provider and voice in `config.env` stay the built-in voice, used until someone chooses.
+
+On the settings page each person has "My voice": a voice from the list, a volume, and a switch for whether the mirror speaks to them at all. The Mirror tab has the mirror's own voice, used for guests and for anyone who has not chosen. "Hear this voice" plays a short sample in the browser, and the mirror itself stays silent. A sample comes from the same cache and counts toward the same daily limit as everything the mirror says, so each voice costs its sample once.
+
+`MMM-Household` sends the resolved choice with `HOUSEHOLD_PRESENCE` as `speech: { voice, volume, speak }`. `MMM-Speak` fixes the voice and the volume when a line is queued, so a line meant for one person does not change voice if someone else steps in front of the mirror before it plays. With "Speak to me" off, a line for that person is dropped and `TTS_SAY_ERROR` is sent in its place.
+
 ## Google calendars and tasks
 
 Each person's Google accounts show on their view, read-only: calendars through our fork of `MMM-GoogleCalendar` and tasks through `MMM-HouseholdTasks`. `config.js` has one calendar instance and one tasks instance per account, built by the `googleCalendar` and `googleTasks` helpers at the top of the file.
