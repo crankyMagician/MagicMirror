@@ -86,6 +86,9 @@ Module.register("MMM-Household", {
 			this.sendNotification("HOUSEHOLD_PRESENCE", payload);
 		} else if (notification === "ALERT") {
 			this.sendNotification("SHOW_ALERT", payload);
+		} else if (notification === "MIRROR") {
+			// The mirror's name and the phrases to listen for. MMM-Voice acts on it.
+			this.sendNotification("HOUSEHOLD_MIRROR", payload);
 		}
 	},
 

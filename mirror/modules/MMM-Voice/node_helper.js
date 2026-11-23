@@ -17,6 +17,8 @@ module.exports = NodeHelper.create({
 		this.service = null;
 		this.restartDelay = 2000;
 		this.stopping = false;
+		// Set by MMM-Household once it knows the household's wake phrase.
+		this.wakePhrases = null;
 	},
 
 	stop () {
@@ -37,6 +39,15 @@ module.exports = NodeHelper.create({
 			this.startService();
 		} else if (notification === "MUTE") {
 			this.send({ cmd: "mute", on: Boolean(payload) });
+		} else if (notification === "WAKE_PHRASES" && Array.isArray(payload) && payload.length > 0) {
+			const phrases = payload.map(String);
+			if (JSON.stringify(phrases) !== JSON.stringify(this.wakePhrases)) {
+				this.wakePhrases = phrases;
+				// The recognizer takes a new command list while it runs.
+				if (this.config) {
+					this.send({ cmd: "commands", commands: this.commands() });
+				}
+			}
 		}
 	},
 
@@ -63,7 +74,7 @@ module.exports = NodeHelper.create({
 		const args = [script, "--device", String(this.config.microphone), "--min-confidence", String(this.config.minConfidence)];
 		const child = spawn(PYTHON, args, { stdio: ["pipe", "pipe", "pipe"] });
 		this.service = child;
-		this.send({ cmd: "commands", commands: buildCommands(this.config) });
+		this.send({ cmd: "commands", commands: this.commands() });
 
 		readline.createInterface({ input: child.stdout }).on("line", (line) => this.handleLine(line));
 		readline.createInterface({ input: child.stderr }).on("line", (line) => Log.warn(`voice: ${line}`));
@@ -77,6 +88,14 @@ module.exports = NodeHelper.create({
 			setTimeout(() => this.startService(), this.restartDelay);
 			this.restartDelay = Math.min(this.restartDelay * 2, 60000);
 		});
+	},
+
+	/**
+	 * Builds the command list for the wake phrases in force.
+	 * @returns {object[]} commands as { id, phrases }
+	 */
+	commands () {
+		return buildCommands({ ...this.config, wakeWords: this.wakePhrases || [this.config.wakeWord] });
 	},
 
 	send (message) {
@@ -95,7 +114,7 @@ module.exports = NodeHelper.create({
 		}
 		if (message.type === "ready") {
 			this.restartDelay = 2000;
-			Log.log(`Listening for ${message.phrases} phrases that start with "${this.config.wakeWord}"`);
+			Log.log(`Listening for ${message.phrases} phrases that start with ${(this.wakePhrases || [this.config.wakeWord]).map((phrase) => `"${phrase}"`).join(" or ")}`);
 		} else if (message.type === "command") {
 			Log.log(`Heard: ${message.text} (${message.confidence})`);
 			if (this.config.chime) {

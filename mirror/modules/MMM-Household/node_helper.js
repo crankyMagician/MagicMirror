@@ -12,6 +12,7 @@ const { createSynth } = require("../MMM-Speak/synth");
 const { ProfileStore, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
 const { addUniFiRoutes } = require("./unifi-routes");
 const { addVoiceRoutes, voicesOn } = require("./voice-routes");
+const { createVocabularyCheck, phraseProblem, startsWithPhrase, tidyPhrase } = require("./wake-phrase");
 const { addPhotoRoutes } = require("./photos-routes");
 const { addArtRoutes } = require("./art-feed");
 
@@ -34,6 +35,10 @@ module.exports = NodeHelper.create({
 		// The parts of the day and quiet hours belong to the mirror, not to a person.
 		this.mirror = this.store.getMirror();
 		this.blocks = this.mirror.blocks;
+		// Asks the speech model whether it knows the words of a new wake phrase.
+		this.checkVocabulary = createVocabularyCheck({ python: PYTHON, script: path.resolve(fs.realpathSync(this.path), "../../services/voice.py") });
+		// When the mirror last heard a spoken command, for the page's "try it" step.
+		this.heardAt = 0;
 		this.lastView = "";
 		// Set by voice commands. They last until the person leaves.
 		this.wakeUntil = 0;
@@ -175,7 +180,7 @@ module.exports = NodeHelper.create({
 				voices: voicesOn(this.speakConfig()),
 				features: this.features,
 				profiles: Object.fromEntries(people.map((name) => [name, this.profileOf(name)])),
-				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, theme: view.theme, screenOn: this.screenOn, camera: this.presence !== null }
+				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, theme: view.theme, screenOn: this.screenOn, camera: this.presence !== null, heardAt: this.heardAt }
 			});
 		});
 
@@ -203,15 +208,43 @@ module.exports = NodeHelper.create({
 			res.json({ profile: this.profileOf(name) });
 		});
 
-		app.put("/api/mirror", jsonOnly, json, (req, res) => {
+		app.put("/api/mirror", jsonOnly, json, async (req, res) => {
 			const problem = problemWithMirror(req.body, this.voiceIds());
 			if (problem) {
 				res.status(400).json({ error: problem });
 				return;
 			}
+			// The page does not set the wake phrase. It proposes a candidate, and
+			// the candidate takes over once the mirror has heard it. A page from
+			// before the mirror had a voice or a name does not send those. Keep them.
+			const next = { voice: this.mirror.voice, name: this.mirror.name, ...req.body, wakePhrase: this.mirror.wakePhrase, wakeCandidate: this.mirror.wakeCandidate };
+			if (req.body.wakeCandidate !== undefined) {
+				const candidate = tidyPhrase(req.body.wakeCandidate);
+				if (candidate === "" || candidate === this.mirror.wakePhrase) {
+					next.wakeCandidate = "";
+				} else if (candidate !== this.mirror.wakeCandidate) {
+					const shape = phraseProblem(candidate);
+					if (shape) {
+						res.status(400).json({ error: shape });
+						return;
+					}
+					let missing;
+					try {
+						missing = await this.checkVocabulary(candidate);
+					} catch (error) {
+						Log.warn(`Could not check a wake phrase: ${error.message}`);
+						res.status(503).json({ error: "The mirror could not check that phrase just now. Nothing was changed." });
+						return;
+					}
+					if (missing.length > 0) {
+						res.status(400).json({ error: `The mirror's speech model does not know ${missing.map((word) => `"${word}"`).join(" or ")}. Try other words.` });
+						return;
+					}
+					next.wakeCandidate = candidate;
+				}
+			}
 			try {
-				// A page from before the mirror had a voice does not send one. Keep it.
-				this.store.setMirror({ voice: this.mirror.voice, ...req.body });
+				this.store.setMirror(next);
 			} catch (error) {
 				Log.error(`Could not save the mirror settings: ${error.message}`);
 				res.status(500).json({ error: "The mirror could not save that" });
@@ -220,6 +253,7 @@ module.exports = NodeHelper.create({
 			this.mirror = this.store.getMirror();
 			this.blocks = this.mirror.blocks;
 			Log.log("Saved the mirror settings");
+			this.sendMirror();
 			this.refresh();
 			res.json({ mirror: this.mirror });
 		});
@@ -275,6 +309,7 @@ module.exports = NodeHelper.create({
 				this.scheduleScreenOff();
 			}
 			this.lastView = "";
+			this.sendMirror();
 			this.refresh();
 		} else if (notification === "FEATURES") {
 			this.features = payload;
@@ -289,9 +324,26 @@ module.exports = NodeHelper.create({
 	 * Acts on a spoken command relayed from MMM-Voice.
 	 * @param {object} command the command, with an `id` such as "wake_up" or "hide:calendar"
 	 */
+	/** Tells the other modules the mirror's name and what to listen for. */
+	sendMirror () {
+		this.sendSocketNotification("MIRROR", { name: this.mirror.name, wakePhrase: this.mirror.wakePhrase, wakeCandidate: this.mirror.wakeCandidate });
+	},
+
 	handleVoice (command) {
 		if (!this.config || !command || typeof command.id !== "string") {
 			return;
+		}
+		this.heardAt = Date.now();
+		// A new wake phrase that the mirror has now heard takes over.
+		if (startsWithPhrase(command.text, this.mirror.wakeCandidate)) {
+			try {
+				this.store.setMirror({ ...this.mirror, wakePhrase: this.mirror.wakeCandidate, wakeCandidate: "" });
+				this.mirror = this.store.getMirror();
+				Log.log("The new wake phrase was heard and has taken over");
+				this.sendMirror();
+			} catch (error) {
+				Log.error(`Could not save the new wake phrase: ${error.message}`);
+			}
 		}
 		const [action, feature] = command.id.split(":");
 		if (action === "wake_up") {

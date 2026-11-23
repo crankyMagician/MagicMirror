@@ -286,3 +286,65 @@ test("with no voices on offer the voice sections stay hidden", async (t) => {
 	assert.equal(dom.window.document.getElementById("voice-section").hidden, true);
 	assert.equal(dom.window.document.getElementById("mirror-voice-section").hidden, true);
 });
+
+test("the Mirror tab names the mirror and tries a new wake phrase beside the old one", async (t) => {
+	const people = ["sam"];
+	const mirror = defaultMirror();
+	const state = { people, profiles: { sam: defaultProfile(["clock"], DEFAULT_BLOCKS) }, blocks: DEFAULT_BLOCKS, mirror, features: [{ key: "clock", label: "Clock", owners: [] }], enrolled: [], now: { camera: false, block: "day" } };
+	const dom = new JSDOM(fs.readFileSync(path.join(__dirname, "public/settings.html"), "utf8"), { url: "http://mirror.test", runScripts: "outside-only" });
+	t.after(() => dom.window.close());
+	dom.window.structuredClone = structuredClone;
+	const saved = [];
+	dom.window.fetch = (url, options) => {
+		if (!options?.method) {
+			return Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(state)) });
+		}
+		const body = JSON.parse(options.body);
+		saved.push(body);
+		// The mirror answers as the real one does: an unknown word is refused,
+		// and an accepted phrase goes on trial while the old one stays.
+		if (body.wakeCandidate === "jarvis") {
+			return Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "The mirror's speech model does not know \"jarvis\". Try other words." }) });
+		}
+		return Promise.resolve({ ok: true, json: () => Promise.resolve({ mirror: { ...body, wakePhrase: "mirror" } }) });
+	};
+	dom.window.eval(fs.readFileSync(path.join(__dirname, "public/settings.js"), "utf8"));
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	const document = dom.window.document;
+	document.querySelectorAll("#people button")[1].click();
+
+	assert.equal(document.getElementById("mirror-title").textContent, "Mirror");
+	assert.match(document.getElementById("wake-current").textContent, /You say "mirror" before every command/);
+	assert.equal(document.getElementById("wake-cancel").hidden, true);
+
+	// A name is saved with the other mirror settings and shows in the title.
+	const name = document.getElementById("mirror-name");
+	name.value = "Looking Glass";
+	name.dispatchEvent(new dom.window.Event("change"));
+	assert.equal(document.getElementById("mirror-title").textContent, "Looking Glass");
+	await new Promise((resolve) => setTimeout(resolve, 450));
+	assert.equal(saved.at(-1).name, "Looking Glass");
+
+	// A word the speech model does not know is refused with the mirror's reason.
+	document.getElementById("wake-new").value = "jarvis";
+	document.getElementById("wake-try").click();
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.match(document.getElementById("wake-note").textContent, /does not know "jarvis"/);
+	assert.equal(document.getElementById("wake-cancel").hidden, true);
+
+	// An accepted phrase goes on trial: the old one is still the wake phrase.
+	document.getElementById("wake-new").value = "hey mirror";
+	document.getElementById("wake-try").click();
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.equal(saved.at(-1).wakeCandidate, "hey mirror");
+	assert.match(document.getElementById("wake-note").textContent, /also listening for "hey mirror"/);
+	assert.match(document.getElementById("wake-note").textContent, /"mirror" keeps working until then/);
+	assert.match(document.getElementById("wake-current").textContent, /You say "mirror"/);
+	assert.equal(document.getElementById("wake-cancel").hidden, false);
+
+	// Stopping the trial sends an empty candidate.
+	document.getElementById("wake-cancel").click();
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.equal(saved.at(-1).wakeCandidate, "");
+	assert.equal(document.getElementById("wake-cancel").hidden, true);
+});

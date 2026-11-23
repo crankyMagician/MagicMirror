@@ -283,3 +283,24 @@ test("viewFor says how to speak: the person's own voice, or the mirror's", () =>
 	assert.deepEqual(viewFor({ person: null, unknown: false, profile: null, blocks: DEFAULT_BLOCKS }, at("12:00")).speech, { voice: "", volume: 100, speak: true });
 	assert.deepEqual(viewFor(state({ profile: chosen, mirrorVoice: "katie", quietHours: QUIET }), at("23:30")).speech, { voice: "katie", volume: 100, speak: true });
 });
+
+test("the mirror has a name, a wake phrase and room for one on trial", () => {
+	const mirror = defaultMirror();
+	assert.deepEqual([mirror.name, mirror.wakePhrase, mirror.wakeCandidate], ["Mirror", "mirror", ""]);
+	const stored = normalizeMirror({ name: "  Looking Glass ", wakePhrase: "hey mirror", wakeCandidate: "magic mirror" });
+	assert.deepEqual([stored.name, stored.wakePhrase, stored.wakeCandidate], ["Looking Glass", "hey mirror", "magic mirror"]);
+	// Stored nonsense falls back, and a candidate equal to the phrase is no candidate.
+	const mended = normalizeMirror({ name: "<b>", wakePhrase: "Hey Mirror!", wakeCandidate: "mirror" });
+	assert.deepEqual([mended.name, mended.wakePhrase, mended.wakeCandidate], ["Mirror", "mirror", ""]);
+	assert.equal(normalizeMirror({ name: "x".repeat(25) }).name, "Mirror");
+});
+
+test("problemWithMirror checks a submitted name and candidate phrase", () => {
+	const good = { ...defaultMirror(), name: "Glass", wakeCandidate: "hey mirror" };
+	assert.equal(problemWithMirror(good), null);
+	assert.equal(problemWithMirror({ ...good, wakeCandidate: "" }), null);
+	assert.match(problemWithMirror({ ...good, name: "" }), /1 to 24 characters/);
+	assert.match(problemWithMirror({ ...good, name: "a<script>" }), /1 to 24 characters/);
+	assert.match(problemWithMirror({ ...good, wakeCandidate: "Hey Mirror" }), /plain words/);
+	assert.match(problemWithMirror({ ...good, wakeCandidate: 7 }), /plain words/);
+});

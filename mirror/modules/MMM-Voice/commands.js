@@ -4,16 +4,18 @@
  * Expands the module's config into commands with full phrases.
  * @param {object} config MMM-Voice's config
  * @param {string} config.wakeWord the word every phrase starts with
+ * @param {string[]} [config.wakeWords] several wake phrases in place of the one word: every command answers to each of them
  * @param {object} config.commands command id -> phrases without the wake word
  * @param {object} config.features spoken name -> feature key
  * @returns {object[]} commands as { id, phrases }
  */
-const buildCommands = ({ wakeWord, commands = {}, features = {} }) => {
-	const withWake = (phrase) => `${wakeWord} ${phrase}`.toLowerCase();
-	const list = Object.entries(commands).map(([id, phrases]) => ({ id, phrases: phrases.map(withWake) }));
+const buildCommands = ({ wakeWord, wakeWords, commands = {}, features = {} }) => {
+	const wakes = Array.isArray(wakeWords) && wakeWords.length > 0 ? wakeWords : [wakeWord];
+	const withWake = (phrase) => wakes.map((wake) => `${wake} ${phrase}`.toLowerCase());
+	const list = Object.entries(commands).map(([id, phrases]) => ({ id, phrases: phrases.flatMap(withWake) }));
 	for (const [spoken, key] of Object.entries(features)) {
 		for (const action of ["show", "hide"]) {
-			list.push({ id: `${action}:${key}`, phrases: [withWake(`${action} ${spoken}`), withWake(`${action} the ${spoken}`)] });
+			list.push({ id: `${action}:${key}`, phrases: [...withWake(`${action} ${spoken}`), ...withWake(`${action} the ${spoken}`)] });
 		}
 	}
 	return list;

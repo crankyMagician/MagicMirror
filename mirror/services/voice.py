@@ -162,6 +162,7 @@ def main() -> int:
     parser.add_argument("--min-confidence", type=float, default=0.8, help="ignore commands recognized with less confidence than this")
     parser.add_argument("--commands", help="JSON file with the command list, for use without the helper")
     parser.add_argument("--wav", help="recognize this 16 kHz mono WAV file, print the result and exit")
+    parser.add_argument("--check-words", metavar="PHRASE", help="print the words of this phrase that the speech model does not know, and exit")
     args = parser.parse_args()
 
     try:
@@ -174,6 +175,10 @@ def main() -> int:
     except Exception as error:  # noqa: BLE001 - reported to the helper, then exit
         emit({"type": "error", "message": str(error)})
         return 1
+
+    if args.check_words is not None:
+        emit({"type": "checked", "missing": missing_words(model, Commands([{"id": "check", "phrases": [args.check_words]}]))})
+        return 0
 
     commands = None
     if args.commands:

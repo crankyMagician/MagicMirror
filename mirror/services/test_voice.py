@@ -56,6 +56,13 @@ class CommandsTest(unittest.TestCase):
     def test_result_without_word_scores_is_dropped(self):
         self.assertIsNone(COMMANDS.match({"text": "mirror good night"}, 0.8))
 
+class CheckWordsTest(unittest.TestCase):
+    """The words-only check builds its command list the way the helper's does."""
+
+    def test_a_phrase_to_check_becomes_one_command(self):
+        commands = Commands([{"id": "check", "phrases": ["Hey, Mirror!"]}])
+        self.assertEqual(json.loads(commands.grammar()), ["hey mirror", "[unk]"])
+
 
 if __name__ == "__main__":
     unittest.main()

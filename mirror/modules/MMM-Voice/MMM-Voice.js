@@ -15,6 +15,8 @@
  */
 Module.register("MMM-Voice", {
 	defaults: {
+		// The word before every command. MMM-Household's Mirror tab can
+		// replace it at run time (HOUSEHOLD_MIRROR).
 		wakeWord: "mirror",
 		// ALSA capture device of the microphone.
 		microphone: "plughw:CARD=Webcam",
@@ -53,7 +55,13 @@ Module.register("MMM-Voice", {
 		}
 	},
 
-	notificationReceived (notification) {
+	notificationReceived (notification, payload) {
+		if (notification === "HOUSEHOLD_MIRROR" && payload) {
+			// The household's own wake phrase replaces `wakeWord`. While a new
+			// phrase is on trial, the mirror listens for the old and the new.
+			this.sendSocketNotification("WAKE_PHRASES", [payload.wakePhrase, payload.wakeCandidate].filter(Boolean));
+			return;
+		}
 		// Stop listening while a speech module talks, so the mirror does not hear itself.
 		if (notification === "TTS_SAY_STARTING") {
 			this.sendSocketNotification("MUTE", true);

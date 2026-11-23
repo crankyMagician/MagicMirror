@@ -327,3 +327,30 @@ input[type="range"] {
   max-width: 14rem;
   accent-color: var(--accent);
 }
+
+/* Name and wake phrase. */
+#mirror-name,
+#wake-new {
+  min-width: 0;
+  flex: 1;
+  max-width: 14rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+#wake-try,
+#wake-cancel {
+  width: 100%;
+  margin: 0.4rem 0;
+  padding: 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+}
