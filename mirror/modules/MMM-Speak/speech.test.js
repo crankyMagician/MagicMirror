@@ -1,7 +1,7 @@
 // Run with: node --test "mirror/modules/**/*.test.js"
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { cacheName, prepare, providerFor, sampleRate, spend } = require("./speech");
+const { cacheName, prepare, providerFor, retrying, sampleRate, speakerBusy, spend } = require("./speech");
 
 const voice = { provider: "elevenlabs", voiceId: "v1", model: "eleven_flash_v2_5", format: "pcm_22050" };
 
@@ -68,4 +68,37 @@ test("the Cartesia request asks for raw 16-bit PCM at the same rate", () => {
 
 test("an unknown provider is refused by name", () => {
 	assert.throws(() => providerFor("festival"), /unknown speech provider "festival"/);
+});
+
+test("speakerBusy recognizes a speaker that something else is using", () => {
+	assert.equal(speakerBusy(new Error("aplay exited with 1: aplay: main:834: audio open error: Device or resource busy")), true);
+	assert.equal(speakerBusy(new Error("aplay exited with 1: No such file or directory")), false);
+	assert.equal(speakerBusy(undefined), false);
+});
+
+test("retrying waits out a busy speaker and gives up on anything else", async () => {
+	const busy = new Error("audio open error: Device or resource busy");
+	const pauses = [];
+	const sleep = async (ms) => { pauses.push(ms); };
+	let calls = 0;
+	const result = await retrying(async () => {
+		calls += 1;
+		if (calls < 3) {
+			throw busy;
+		}
+		return "played";
+	}, { attempts: 8, waitMs: 250, when: speakerBusy, sleep });
+	assert.equal(result, "played");
+	assert.equal(calls, 3);
+	assert.deepEqual(pauses, [250, 250]);
+
+	// It stops after the last attempt.
+	calls = 0;
+	await assert.rejects(retrying(async () => { calls += 1; throw busy; }, { attempts: 4, waitMs: 1, when: speakerBusy, sleep }), /busy/);
+	assert.equal(calls, 4);
+
+	// A failure that waiting cannot fix is not retried.
+	calls = 0;
+	await assert.rejects(retrying(async () => { calls += 1; throw new Error("no such device"); }, { attempts: 4, waitMs: 1, when: speakerBusy, sleep }), /no such device/);
+	assert.equal(calls, 1);
 });

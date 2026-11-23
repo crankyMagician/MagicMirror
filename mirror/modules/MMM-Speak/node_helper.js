@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const { cacheName, prepare, providerFor, sampleRate, spend } = require("./speech");
+const { cacheName, prepare, providerFor, retrying, sampleRate, speakerBusy, spend } = require("./speech");
 
 const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-data");
 const CACHE_DIR = path.join(DATA_DIR, "speech");
@@ -141,7 +141,18 @@ module.exports = NodeHelper.create({
 		}
 	},
 
+	/**
+	 * Plays a file, waiting out the tone that confirms a voice command. The
+	 * tone holds the speaker for a moment, and a cached line can be ready
+	 * before it ends.
+	 * @param {string} file the audio to play
+	 * @returns {Promise} resolves when the line has been played
+	 */
 	play (file) {
+		return retrying(() => this.playOnce(file), { attempts: 8, waitMs: 250, when: speakerBusy });
+	},
+
+	playOnce (file) {
 		return new Promise((resolve, reject) => {
 			const rate = sampleRate(this.config.format);
 			const args = ["-q", "-D", String(this.config.speaker), "-t", "raw", "-f", "S16_LE", "-c", "1", "-r", String(rate), file];

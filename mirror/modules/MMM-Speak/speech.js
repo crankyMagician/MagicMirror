@@ -107,4 +107,35 @@ const providerFor = (name) => {
 	return provider;
 };
 
-module.exports = { cacheName, prepare, providerFor, sampleRate, spend };
+/**
+ * Tells whether a player failed because something else holds the speaker,
+ * such as the short tone that confirms a voice command.
+ * @param {Error} error the player's failure
+ * @returns {boolean} true when trying again a moment later can work
+ */
+const speakerBusy = (error) => (/device or resource busy/i).test(String(error && error.message));
+
+/**
+ * Runs an action again while it fails for a reason worth waiting out.
+ * @param {Function} action returns a promise
+ * @param {object} options how to retry
+ * @param {number} options.attempts the most times to run the action
+ * @param {number} options.waitMs the pause between attempts
+ * @param {function(Error): boolean} options.when tells whether a failure is worth another attempt
+ * @param {function(number): Promise} [options.sleep] stands in for the pause in tests
+ * @returns {Promise} the action's result
+ */
+const retrying = async (action, { attempts, waitMs, when, sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }) }) => {
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			return await action();
+		} catch (error) {
+			if (attempt >= attempts || !when(error)) {
+				throw error;
+			}
+			await sleep(waitMs);
+		}
+	}
+};
+
+module.exports = { cacheName, prepare, providerFor, retrying, sampleRate, speakerBusy, spend };
