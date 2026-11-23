@@ -14,6 +14,22 @@
         <p id="live" class="live">Connecting to the mirror</p>
       </header>
 
+      <p id="account" class="account" hidden></p>
+
+      <section id="signin" aria-labelledby="signin-title" hidden>
+        <h2 id="signin-title">Sign in</h2>
+        <p id="signin-note" class="hint" role="status"></p>
+        <a id="signin-home" hidden></a>
+        <div id="signin-ways">
+          <a id="signin-google" class="button" href="#">Sign in with Google</a>
+          <form id="signin-form">
+            <label class="row">Email <input id="signin-email" type="email" autocomplete="username" required /></label>
+            <label class="row">Password <input id="signin-password" type="password" autocomplete="current-password" required /></label>
+            <button type="submit">Sign in</button>
+          </form>
+        </div>
+      </section>
+
       <nav id="people" class="people" aria-label="Whose settings"></nav>
 
       <div id="person-view">

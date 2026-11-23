@@ -42,9 +42,83 @@
 		}
 	};
 
-	const request = async (path, options = {}) => {
+	// What the mirror says about login: whether it is on and who is signed in.
+	let session = { login: false, signedIn: true };
+	let signedOut = false;
+
+	// Calls the household's login server from the browser, with its cookies.
+	const authCall = (path, options = {}) => fetch(session.authUrl + path, { credentials: "include", ...options });
+
+	const SIGN_IN_ERRORS = {
+		OAUTH_ACCOUNT_NOT_FOUND: "That Google account is not one of the mirror's people.",
+		OAUTH_LOCAL_ACCOUNT_UNCONFIRMED: "That account is not ready for Google sign-in yet. Use the password."
+	};
+
+	// Replaces the settings with the sign-in form.
+	const showSignIn = (note) => {
+		signedOut = true;
+		["people", "person-view", "mirror-view", "account"].forEach((id) => { $(id).hidden = true; });
+		$("signin").hidden = false;
+		$("signin-note").textContent = note || "";
+		// The login cookie belongs to the mirror's own name. At any other
+		// address the browser would not send it, so point there first.
+		const elsewhere = session.home && new URL(session.home).origin !== window.location.origin;
+		$("signin-ways").hidden = Boolean(elsewhere) || session.refused === true;
+		$("signin-home").hidden = !elsewhere;
+		if (elsewhere) {
+			$("signin-home").href = session.home;
+			$("signin-home").textContent = `Sign in at ${new URL(session.home).host}`;
+		}
+		$("signin-google").href = `${session.authUrl}/api/v1/auth/google`;
+	};
+
+	const signOut = async () => {
+		await authCall("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
+		window.location.replace("/");
+	};
+
+	const bindSignIn = () => {
+		$("signin-form").addEventListener("submit", async (event) => {
+			event.preventDefault();
+			$("signin-note").textContent = "Signing in";
+			try {
+				const response = await authCall("/api/v1/auth/login", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ identifier: $("signin-email").value.trim().toLowerCase(), password: $("signin-password").value })
+				});
+				const body = await response.json().catch(() => ({}));
+				if (response.ok && body.data && body.data.user) {
+					window.location.replace("/");
+					return;
+				}
+				$("signin-note").textContent = response.ok
+					? "This account needs a second step that this page does not offer."
+					: (body.error && body.error.message) || "That did not work. Check the address and the password.";
+			} catch {
+				$("signin-note").textContent = "The login server is not answering.";
+			}
+		});
+	};
+
+	const renderAccount = () => {
+		const out = el("button", { type: "button", className: "link", textContent: "Sign out" });
+		out.addEventListener("click", signOut);
+		$("account").replaceChildren(`Signed in as ${session.email || "this mirror"} · `, out);
+		$("account").hidden = false;
+	};
+
+	const request = async (path, options = {}, retried = false) => {
 		const response = await fetch(API + path, options);
 		const body = await response.json().catch(() => ({}));
+		if (response.status === 401 && session.login && !signedOut) {
+			// A sign-in lasts an hour. Ask the login server for a fresh one, once.
+			const fresh = retried ? null : await authCall("/api/v1/auth/refresh", { method: "POST" }).catch(() => null);
+			if (fresh && fresh.ok) {
+				return request(path, options, true);
+			}
+			showSignIn("Your sign-in has run out.");
+		}
 		if (!response.ok) {
 			throw new Error(body.error || `The mirror answered ${response.status}`);
 		}
@@ -363,6 +437,9 @@
 	};
 
 	const poll = async () => {
+		if (signedOut) {
+			return;
+		}
 		loadPhotos();
 		loadArt();
 		try {
@@ -378,6 +455,30 @@
 
 	const start = async () => {
 		try {
+			session = await (await fetch(`${API}/session`)).json();
+		} catch {
+			session = { login: false, signedIn: true };
+		}
+		if (session.login === true) {
+			bindSignIn();
+			if (!session.signedIn) {
+				const code = new URLSearchParams(window.location.search).get("error");
+				if (session.refused) {
+					const out = el("button", { type: "button", className: "link", textContent: "Sign out and use another account" });
+					out.addEventListener("click", signOut);
+					showSignIn(session.problem);
+					$("signin-note").append(" ", out);
+				} else {
+					showSignIn(SIGN_IN_ERRORS[code] || (code ? "Signing in with Google did not work." : session.problem && session.problem.startsWith("The login server") ? session.problem : ""));
+				}
+				return;
+			}
+			renderAccount();
+			if (window.location.pathname === "/login") {
+				window.history.replaceState(null, "", "/");
+			}
+		}
+		try {
 			data = await request("/state");
 		} catch (error) {
 			$("live").textContent = `The mirror is not answering: ${error.message}`;
@@ -391,6 +492,10 @@
 			remembered = null;
 		}
 		person = data.people.includes(remembered) ? remembered : data.people[0];
+		// A signed-in person starts on their own settings.
+		if (data.people.includes(session.person)) {
+			person = session.person;
+		}
 		$("theme").addEventListener("change", (event) => {
 			data.profiles[person].theme = event.target.value;
 			renderAppearance();

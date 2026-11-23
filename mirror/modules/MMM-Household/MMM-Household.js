@@ -37,6 +37,13 @@ Module.register("MMM-Household", {
 		// it. Use CIDR ranges for the home network, for example "192.168.1.0/24".
 		settingsPort: 8081,
 		settingsAllow: ["127.0.0.1", "::1"],
+		// Host names the settings page answers to, besides bare addresses.
+		settingsHosts: ["localhost", "mirror", "mirror.local"],
+		// The household's login server. With `authUrl` empty the page has no
+		// login and the network filter above is the only guard. With it set,
+		// the page and its API need a signed-in account from `accounts`
+		// (email address -> person), and `host` is the name people open.
+		login: { authUrl: "", host: "", cookie: "household_auth", accounts: {} },
 		// Person -> the Google account whose photos they pick for their
 		// slideshow. A person not listed uses "<name>-personal".
 		photoAccounts: {},
