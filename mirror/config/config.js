@@ -53,6 +53,21 @@ const photoFrame = (person) => ({
 	}
 });
 
+// A framed painting from a feed of public domain art, for someone who would
+// sooner see art than their own photos. MMM-Household downloads the feed.
+const artFrame = (person) => ({
+	module: "MMM-ImagesPhotos",
+	classes: person + " feature-art",
+	position: "lower_third",
+	config: {
+		path: dataDir + "/art/" + person,
+		updateInterval: 60 * 1000,
+		maxWidth: "380px",
+		maxHeight: "380px",
+		opacity: 1
+	}
+});
+
 const config = {
 	// MagicMirror answers only on the Pi itself. The settings page that phones
 	// open is served separately by MMM-Household (see settingsPort below).
@@ -82,6 +97,8 @@ const config = {
 				// The settings page: http://mirror.local:8081/ from the home network.
 				settingsPort: 8081,
 				settingsAllow: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
+				// Heather's frame shows a weekly set of paintings from The Met.
+				artFeeds: { heather: "https://crankymagician.github.io/tv-art/mirror/feed.json" },
 				// Names on the settings page for the third-party modules below.
 				labels: {
 					calendar: "Calendar",
@@ -89,6 +106,7 @@ const config = {
 					tasks: "Tasks",
 					"work-tasks": "Work tasks",
 					photos: "Photos",
+					art: "Art",
 					unifi: "Network devices",
 					"MMM-MoonPhase": "Moon",
 					"MMM-APOD": "Space picture",
@@ -115,6 +133,7 @@ const config = {
 					tasks: "tasks",
 					"work tasks": "work-tasks",
 					photos: "photos",
+					art: "art",
 					weather: "weather",
 					forecast: "forecast",
 					news: "newsfeed",
@@ -145,7 +164,7 @@ const config = {
 		googleTasks("heather", "heather-personal", "Tasks", "tasks"),
 		googleTasks("heather", "heather-merrows", "Merrows tasks", "work-tasks"),
 		photoFrame("sam"),
-		photoFrame("heather"),
+		artFrame("heather"),
 		{
 			module: "weather",
 			position: "top_right",

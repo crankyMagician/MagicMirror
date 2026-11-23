@@ -153,6 +153,36 @@
 		$("enroll").disabled = !data.now.camera;
 	};
 
+	// Tells whether the chosen person has a feature on their view, for
+	// example a photo frame or an art frame.
+	const has = (key) => data.features.some((feature) => feature.key === key && (feature.owners.length === 0 || feature.owners.includes(person)));
+
+	const setDate = (stamp) => {
+		const date = new Date(stamp);
+		return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+	};
+
+	// Paintings arrive from a feed on their own, so there is nothing to press.
+	const loadArt = async () => {
+		const name = person;
+		$("art-section").hidden = !has("art");
+		if (!has("art")) {
+			return;
+		}
+		try {
+			const art = await request(`/art/${encodeURIComponent(name)}`);
+			if (name !== person) {
+				return;
+			}
+			const since = setDate(art.updated);
+			const count = art.count === 1 ? "1 painting" : `${art.count} paintings`;
+			$("art-state").textContent = art.note
+				|| (art.count === 0 ? "Your frame has no paintings yet." : `Your frame shows ${count}${since ? ` from the set of ${since}` : ""}. A new set arrives every week.`);
+		} catch {
+			$("art-state").textContent = "";
+		}
+	};
+
 	// What the mirror last said about the chosen person's photos.
 	let photos = { count: 0, picking: false, note: "" };
 
@@ -168,6 +198,10 @@
 
 	const loadPhotos = async () => {
 		const name = person;
+		$("photos-section").hidden = !has("photos");
+		if (!has("photos")) {
+			return;
+		}
 		try {
 			const fresh = await request(`/photos/${encodeURIComponent(name)}`);
 			if (name === person) {
@@ -189,6 +223,8 @@
 		photos = { count: 0, picking: false, note: "" };
 		renderPhotos();
 		loadPhotos();
+		$("art-state").textContent = "";
+		loadArt();
 	};
 
 	const renderAppearance = () => {
@@ -277,6 +313,7 @@
 
 	const poll = async () => {
 		loadPhotos();
+		loadArt();
 		try {
 			const fresh = await request("/state");
 			data.now = fresh.now;

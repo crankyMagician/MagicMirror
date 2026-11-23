@@ -84,7 +84,7 @@ Directory modules considered for tasks: `MMM-GoogleTasks` and `MMM-Tasks` both s
 
 ## Photo slideshow
 
-Each person has a framed photo on their view that changes every 20 seconds. The photos come from that person's own Google Photos.
+A person can have a framed photo on their view that changes every 20 seconds. The photos come from that person's own Google Photos.
 
 Google stopped letting apps read a person's albums in March 2025, and the directory's `MMM-GooglePhotos` says it no longer works for that reason. What Google still offers is its photo picker, so that is what the mirror uses:
 
@@ -93,6 +93,8 @@ Google stopped letting apps read a person's albums in March 2025, and the direct
 3. The mirror downloads the chosen photos (fitted to 1600 pixels) to `~/mirror-data/photos/<person>/` on the Pi and the slideshow picks them up within a minute.
 
 They can choose more at any time. "Remove all my photos" empties the folder after a second tap. Up to 300 photos are kept per person. The photos live only on the Pi and never enter this repository.
+
+A person who would sooner see art gets paintings in the same kind of frame. `artFeeds` in `MMM-Household`'s config names a picture feed for that person, and `MMM-Household/art-feed.js` copies the feed's pictures to `~/mirror-data/art/<person>/`, checks for a new set every six hours and removes the old set once the new one has arrived. The feed in use is built weekly by [tv-art](https://github.com/crankyMagician/tv-art) from The Met's public domain paintings. A feed is a JSON file with an `updated` stamp and an `images` list, and only HTTPS pictures on the feed's own host are downloaded. That person's settings page shows "My art" in place of "My photos".
 
 `MMM-Household/photos-routes.js` runs the picker flow, and `MMM-ImagesPhotos` from the module directory, pinned in `modules.lock`, shows the folder. `photoAccounts` in `MMM-Household`'s config names the Google account for each person when it is not `<name>-personal`.
 
