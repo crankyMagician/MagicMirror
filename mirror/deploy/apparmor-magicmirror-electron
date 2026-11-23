@@ -1,0 +1,15 @@
+# Template. setup-pi.sh fills in @MM_DIR@ and installs the result as
+# /etc/apparmor.d/magicmirror-electron.
+#
+# Ubuntu 24.04 blocks unprivileged user namespaces, which Electron's sandbox
+# needs. This profile leaves Electron unconfined and grants it that one
+# permission. It is keyed to the binary's path, so it survives npm install.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile magicmirror-electron @MM_DIR@/node_modules/electron/dist/electron flags=(unconfined) {
+  userns,
+
+  include if exists <local/magicmirror-electron>
+}

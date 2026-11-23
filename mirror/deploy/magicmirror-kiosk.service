@@ -1,0 +1,34 @@
+# Template. setup-pi.sh fills in @USER@, @MM_DIR@ and @ETC_DIR@ and installs
+# the result as /etc/systemd/system/magicmirror-kiosk.service.
+#
+# The unit runs sway on tty1. sway starts MagicMirror and exits when MagicMirror
+# exits, so Restart=always brings the whole session back after a crash.
+
+[Unit]
+Description=MagicMirror kiosk (sway on tty1)
+After=systemd-user-sessions.service network-online.target getty@tty1.service
+Wants=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+User=@USER@
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+WorkingDirectory=@MM_DIR@
+Environment=XDG_SESSION_TYPE=wayland
+# The mirror has no keyboard or mouse. Without this sway refuses to start.
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+ExecStart=/usr/bin/sway --config @ETC_DIR@/sway.conf
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
