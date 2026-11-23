@@ -167,14 +167,10 @@ let config = {
 			classes: "sam heather",
 			position: "top_left",
 			config: {
-				events: [
-					{
-						title: "Christmas",
-						targetTime: "25 Dec 2026",
-						repeat: "yearly",
-						unit: "day"
-					}
-				]
+				// The countdowns are private, so they live in config.env as JSON:
+				// [{"title": "...", "targetTime": "2026-12-25", "repeat": "yearly", "unit": "day"}]
+				// A title cannot contain a single quote.
+				events: JSON.parse('${MIRROR_EVENTS}')
 			}
 		},
 		{
