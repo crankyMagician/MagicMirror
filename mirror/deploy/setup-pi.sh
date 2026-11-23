@@ -46,7 +46,8 @@ apt_get install --no-install-recommends \
 	libgl1-mesa-dri libgles2 libegl1 libgbm1 \
 	libgtk-3-0t64 libnss3 libasound2t64 libxss1 libxtst6 libnotify4 \
 	fonts-dejavu-core fonts-noto-color-emoji \
-	avahi-daemon dbus-user-session
+	avahi-daemon dbus-user-session \
+	python3-venv v4l-utils alsa-utils
 
 echo "==> MagicMirror dependencies"
 as_user "cd '$MM_DIR' && npm run install-mm"
@@ -59,6 +60,11 @@ as_user "
 	ln -sfn ../mirror/config/custom.css config/custom.css
 	[ -f config/config.env ] || cp mirror/config/config.env.sample config/config.env
 	chmod 600 config/config.env
+	# Add names that a newer sample has and the Pi's copy lacks. config.js fails
+	# to load when a \${NAME} in it has no value.
+	grep -E '^[A-Z_]+=' mirror/config/config.env.sample | while IFS= read -r line; do
+		grep -q \"^\${line%%=*}=\" config/config.env || printf '%s\\n' \"\$line\" >> config/config.env
+	done
 	if [ -d mirror/modules ]; then
 		for dir in mirror/modules/*/; do
 			[ -d \"\$dir\" ] || continue
@@ -66,6 +72,23 @@ as_user "
 		done
 	fi
 	mkdir -p '$MIRROR_HOME/mirror-data'
+"
+
+echo "==> Face recognition service"
+DATA_DIR="$MIRROR_HOME/mirror-data"
+MODEL_BASE=https://github.com/opencv/opencv_zoo/raw/main/models
+as_user "
+	set -e
+	mkdir -p '$DATA_DIR/models' '$DATA_DIR/faces'
+	chmod 700 '$DATA_DIR/faces'
+	[ -x '$DATA_DIR/venv/bin/python' ] || python3 -m venv '$DATA_DIR/venv'
+	'$DATA_DIR/venv/bin/pip' install --quiet --disable-pip-version-check -r '$MM_DIR/mirror/services/requirements.txt'
+	fetch_model() {
+		[ -s \"$DATA_DIR/models/\$2\" ] || curl -fsSL -o \"$DATA_DIR/models/\$2\" \"$MODEL_BASE/\$1/\$2\"
+	}
+	fetch_model face_detection_yunet face_detection_yunet_2023mar.onnx
+	fetch_model face_recognition_sface face_recognition_sface_2021dec.onnx
+	cd '$DATA_DIR/models' && sha256sum -c '$DEPLOY_DIR/models.sha256'
 "
 
 echo "==> AppArmor profile for the Electron sandbox"

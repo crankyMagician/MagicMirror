@@ -23,18 +23,43 @@ let config = {
 			module: "alert"
 		},
 		{
+			// Switches the view by who the camera recognizes and lets the screen
+			// sleep when nobody is there. A module with a person's name in its
+			// classes shows only for that person. A module without one is shared.
+			module: "MMM-Household",
+			config: {
+				people: ["sam", "heather"],
+				absentDelay: 60
+			}
+		},
+		{
 			module: "clock",
 			position: "top_left"
 		},
 		{
 			module: "calendar",
-			header: "Calendar",
+			classes: "sam",
+			header: "Sam's calendar",
 			position: "top_left",
 			config: {
 				calendars: [
 					{
 						symbol: "calendar-check",
-						url: "${SECRET_CALENDAR_URL}"
+						url: "${SECRET_CALENDAR_URL_SAM}"
+					}
+				]
+			}
+		},
+		{
+			module: "calendar",
+			classes: "heather",
+			header: "Heather's calendar",
+			position: "top_left",
+			config: {
+				calendars: [
+					{
+						symbol: "calendar-check",
+						url: "${SECRET_CALENDAR_URL_HEATHER}"
 					}
 				]
 			}
@@ -62,10 +87,12 @@ let config = {
 		},
 		{
 			module: "compliments",
+			classes: "sam heather",
 			position: "lower_third"
 		},
 		{
 			module: "newsfeed",
+			classes: "sam heather",
 			position: "bottom_bar",
 			config: {
 				feeds: [

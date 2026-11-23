@@ -6,6 +6,47 @@ Everything specific to the mirror on the Raspberry Pi lives in this directory. U
 
 - `deploy/` holds the setup script, the systemd unit, the sway config and the AppArmor profile.
 - `config/` holds `config.js` and `custom.css`. Private values go in `config/config.env` on the Pi, which is not committed.
+- `modules/MMM-Household/` is the module that switches the view by who is at the mirror and lets the screen sleep.
+- `services/` holds the Python face recognition service that the module starts.
+
+## Who sees what
+
+The webcam watches for faces. `services/presence.py` detects them with OpenCV's YuNet model and recognizes them with SFace, both on the Pi's CPU. Frames stay in memory and nothing leaves the Pi.
+
+In `config.js`, a module with a person's name in its `classes` shows only for that person. A module without one is shared.
+
+```js
+{ module: "calendar", classes: "heather", ... }
+```
+
+- A recognized person sees their modules and the shared ones.
+- With nobody recognized, only shared modules show, and after `absentDelay` seconds the screen turns off. A recognized face turns it back on.
+- Until someone is enrolled, any face counts as a guest and keeps the shared view on.
+
+### Enroll a person
+
+At the mirror, with the person standing in front of the camera:
+
+```sh
+curl -X POST 'http://localhost:8080/household/api/enroll?name=sam'
+```
+
+The mirror shows a notice, takes 20 samples over a few seconds and then recognizes that person.
+
+From photos, for someone who cannot stand at the mirror yet:
+
+```sh
+~/mirror-data/venv/bin/python ~/MagicMirror/mirror/services/enroll.py --name heather --from-photos ~/heather-photos
+```
+
+`enroll.py --list` shows who is enrolled and `enroll.py --remove NAME` removes a person. Only face embeddings are stored, in `~/mirror-data/faces/`, and that directory is outside the repository.
+
+### Check what the mirror thinks
+
+```sh
+curl http://localhost:8080/household/api/status
+journalctl -t magicmirror | grep MMM-Household
+```
 
 ## Install on the Pi
 
