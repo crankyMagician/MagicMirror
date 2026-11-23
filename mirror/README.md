@@ -27,8 +27,10 @@ In `config.js`, a module with a person's name in its `classes` shows only for th
 
 At the mirror, with the person standing in front of the camera:
 
+Open the settings page, pick your name and press "Teach the mirror my face". From a shell on the Pi the same thing is:
+
 ```sh
-curl -X POST 'http://localhost:8080/household/api/enroll?name=sam'
+curl -X POST -H 'Content-Type: application/json' -d '{"name":"sam"}' http://localhost:8080/household/api/enroll
 ```
 
 The mirror shows a notice, takes 20 samples over a few seconds and then recognizes that person.
@@ -40,6 +42,22 @@ From photos, for someone who cannot stand at the mirror yet:
 ```
 
 `enroll.py --list` shows who is enrolled and `enroll.py --remove NAME` removes a person. Only face embeddings are stored, in `~/mirror-data/faces/`, and that directory is outside the repository.
+
+### Settings page
+
+Each person sets their own preferences from a phone on the home network:
+
+    http://mirror.local:8080/household
+
+If the name does not resolve, use the Pi's address in its place.
+
+- **What I see** has a switch for every feature in each part of the day (morning from 5 am, day from 11 am, evening from 5 pm, night from 10 pm).
+- **Quiet hours** keep the screen off for that person between two times, even when the mirror sees them.
+- **My face** starts an enrollment at the mirror.
+
+Changes save as they are made and apply on the mirror within a second. They are stored in `~/mirror-data/profiles.json` on the Pi.
+
+The page has no login. `ipWhitelist` in `config.js` limits it to the home subnets, and anyone on those can change these preferences.
 
 ### Check what the mirror thinks
 
