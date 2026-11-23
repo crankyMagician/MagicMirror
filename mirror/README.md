@@ -28,6 +28,7 @@ Our own modules live in `modules/` here and are linked into place by the setup s
 - `MMM-Household`: who sees what, the screen, the settings page.
 - `MMM-Greeter`: a greeting when a person is recognized. A person with `favorites` gets one of those Pokémon beside it, a different one each day. The pictures are downloaded once to `~/mirror-data/sprites` and are not part of this repository. It sends `TTS_SAY` for a speech module to say the greeting.
 - `MMM-AirQuality`: the US air quality index from Open-Meteo, with no account needed.
+- `MMM-Briefing`: spoken answers to voice commands and a message on special days, described below.
 
 - `MMM-HouseholdTasks`: the open tasks of one Google account, read-only.
 - `MMM-Speak`: the mirror's voice, through ElevenLabs or Cartesia.
@@ -107,7 +108,9 @@ A person who would sooner see art gets paintings in the same kind of frame. `art
 | "Mirror, wake up"                                      | The screen turns on. With nobody recognized it shows the shared view for five minutes. It also overrides quiet hours |
 | "Mirror, good night"                                   | The screen turns off and stays off until you walk away and come back                                                 |
 | "Mirror, show the calendar" / "Mirror, hide news"      | Shows or hides one feature until you leave. The names are in `MMM-Voice`'s `features` option in `config.js`          |
-| "Mirror, good morning" / "Mirror, what is the weather" | Recognized and broadcast as `VOICE_COMMAND`. Nothing answers yet                                                     |
+| "Mirror, what is the weather"                          | The mirror says the temperature, the sky and today's high and low |
+| "Mirror, good morning"                                 | A briefing: the weather, what is left on your calendar today and your open tasks |
+| "Mirror, what is next" / "what is on my calendar"      | The event happening now and the next one on your calendar |
 
 To add a command, add an id and its phrases to `MMM-Voice`'s `commands` option and handle `VOICE_COMMAND` in a module. If a phrase uses a word the speech model does not know, the log names the word.
 
@@ -116,6 +119,20 @@ Test a recording without the microphone (16 kHz, 16-bit, mono WAV):
 ```sh
 ~/mirror-data/venv/bin/python ~/MagicMirror/mirror/services/voice.py --commands commands.json --wav phrase.wav
 ```
+
+## Spoken answers and special days
+
+`MMM-Briefing` answers the last three commands above through `MMM-Speak`. It builds its sentences from what other modules broadcast: `WEATHER_UPDATED` from the weather module, `CALENDAR_EVENTS` from each `MMM-GoogleCalendar` instance (`broadcastEvents` is on) and `HOUSEHOLD_TASKS` from each `MMM-HouseholdTasks` instance. It reads only the calendars and task lists of the person the mirror recognizes, matched by the person name in each module's `classes`. With nobody recognized it gives the weather and keeps the calendar to itself.
+
+A special day is a date, a person and a line. The first time that person is recognized on that date, the mirror shows the line for 90 seconds and says it, once. The list is `MIRROR_SPECIAL_DAYS` in `config.env`, as JSON on one line:
+
+```sh
+MIRROR_SPECIAL_DAYS='[{"date": "12-25", "person": "heather", "line": "Merry Christmas, Heather."}]'
+```
+
+The date is `MM-DD` for every year or `YYYY-MM-DD` for one year. An entry without a person is for everyone, and each person gets it once. An anniversary can count its years: give `"since": 2020` and write `{years}` in the line.
+
+No directory module does this. The voice assistants there (`MMM-AssistantMk2`, `MMM-GoogleAssistant`) send audio to Google and answer from Google's data, and the mirror's own modules already hold everything a briefing needs.
 
 ## Who sees what
 
