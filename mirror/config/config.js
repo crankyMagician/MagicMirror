@@ -170,9 +170,8 @@ const config = {
 			config: {
 				// The countdowns are private, so they live in config.env as JSON:
 				// [{"title": "...", "targetTime": "2026-12-25", "repeat": "yearly", "unit": "day"}]
-				// A title cannot contain a single quote.
-				// eslint-disable-next-line @stylistic/quotes -- Substituted JSON contains double quotes.
-				events: JSON.parse('${MIRROR_EVENTS}')
+				// MagicMirror loads config.env before evaluating this server config.
+				events: JSON.parse(process.env.MIRROR_EVENTS || "[]")
 			}
 		},
 		{
