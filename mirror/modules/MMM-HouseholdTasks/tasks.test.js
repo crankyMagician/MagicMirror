@@ -26,27 +26,32 @@ test("a task due today is still today late in the evening", () => {
 
 test("pickTasks puts dated tasks first, by date, then the rest in list order", () => {
 	const lists = [
-		{ title: "Home", tasks: [
-			{ title: "Water plants", position: "0002" },
-			{ title: "Call the plumber", position: "0001", due: due("2026-11-25") }
-		] },
-		{ title: "Work", tasks: [
-			{ title: "Send invoice", position: "0001", due: due("2026-11-23") },
-			{ title: "Tidy inbox", position: "0002" }
-		] }
+		{ title: "Home",
+			tasks: [
+				{ title: "Water plants", position: "0002" },
+				{ title: "Call the plumber", position: "0001", due: due("2026-11-25") }
+			] },
+		{ title: "Work",
+			tasks: [
+				{ title: "Send invoice", position: "0001", due: due("2026-11-23") },
+				{ title: "Tidy inbox", position: "0002" }
+			] }
 	];
 	assert.deepEqual(pickTasks(lists, 10).map((task) => task.title), ["Send invoice", "Call the plumber", "Water plants", "Tidy inbox"]);
 	assert.equal(pickTasks(lists, 10)[0].list, "Work");
 });
 
 test("pickTasks leaves out completed tasks, subtasks and blank titles, and respects the limit", () => {
-	const lists = [{ title: "Home", tasks: [
-		{ title: "Done already", status: "completed", position: "0001" },
-		{ title: "A subtask", parent: "abc", position: "0002" },
-		{ title: "   ", position: "0003" },
-		{ title: "One", position: "0004" },
-		{ title: "Two", position: "0005" },
-		{ title: "Three", position: "0006" }
-	] }];
+	const lists = [
+		{ title: "Home",
+			tasks: [
+				{ title: "Done already", status: "completed", position: "0001" },
+				{ title: "A subtask", parent: "abc", position: "0002" },
+				{ title: "   ", position: "0003" },
+				{ title: "One", position: "0004" },
+				{ title: "Two", position: "0005" },
+				{ title: "Three", position: "0006" }
+			] }
+	];
 	assert.deepEqual(pickTasks(lists, 2).map((task) => task.title), ["One", "Two"]);
 });

@@ -6,6 +6,11 @@
  * not committed (see config.env.sample). MagicMirror hides any name that
  * starts with SECRET_ from the copy of this config it sends to the browser.
  */
+// Strings in this file are joined with +, never with template literals,
+// because MagicMirror replaces dollar-brace names from the environment in
+// this file's text before it runs.
+/* eslint-disable prefer-template */
+
 // Each Google account has a token file on the Pi, written by
 // mirror/tools/google-connect.py. MagicMirror evaluates this file in Node, so
 // the paths can come from the environment. Strings are joined with + here,

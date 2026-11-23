@@ -159,7 +159,10 @@ module.exports = NodeHelper.create({
 			this.player = spawn("aplay", args, { stdio: ["ignore", "ignore", "pipe"] });
 			let problem = "";
 			this.player.stderr.on("data", (chunk) => { problem += chunk; });
-			this.player.on("error", (error) => { this.player = null; reject(error); });
+			this.player.on("error", (error) => {
+				this.player = null;
+				reject(error);
+			});
 			this.player.on("exit", (code, signal) => {
 				this.player = null;
 				// A STOP kills the player. That is not a failure.

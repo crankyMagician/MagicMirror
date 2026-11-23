@@ -103,14 +103,14 @@ A person who would sooner see art gets paintings in the same kind of frame. `art
 
 `MMM-Voice` listens through the webcam's microphone for phrases that start with "mirror". `services/voice.py` recognizes them on the Pi with Vosk and a fixed phrase list, so the recognizer can only answer with a listed phrase. Audio stays in memory and never leaves the Pi. A short tone on the speaker confirms each command.
 
-| Say                                                    | What happens                                                                                                         |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| "Mirror, wake up"                                      | The screen turns on. With nobody recognized it shows the shared view for five minutes. It also overrides quiet hours |
-| "Mirror, good night"                                   | The screen turns off and stays off until you walk away and come back                                                 |
-| "Mirror, show the calendar" / "Mirror, hide news"      | Shows or hides one feature until you leave. The names are in `MMM-Voice`'s `features` option in `config.js`          |
-| "Mirror, what is the weather"                          | The mirror says the temperature, the sky and today's high and low |
-| "Mirror, good morning"                                 | A briefing: the weather, what is left on your calendar today and your open tasks |
-| "Mirror, what is next" / "what is on my calendar"      | The event happening now and the next one on your calendar |
+| Say                                               | What happens                                                                                                         |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| "Mirror, wake up"                                 | The screen turns on. With nobody recognized it shows the shared view for five minutes. It also overrides quiet hours |
+| "Mirror, good night"                              | The screen turns off and stays off until you walk away and come back                                                 |
+| "Mirror, show the calendar" / "Mirror, hide news" | Shows or hides one feature until you leave. The names are in `MMM-Voice`'s `features` option in `config.js`          |
+| "Mirror, what is the weather"                     | The mirror says the temperature, the sky and today's high and low                                                    |
+| "Mirror, good morning"                            | A briefing: the weather, what is left on your calendar today and your open tasks                                     |
+| "Mirror, what is next" / "what is on my calendar" | The event happening now and the next one on your calendar                                                            |
 
 To add a command, add an id and its phrases to `MMM-Voice`'s `commands` option and handle `VOICE_COMMAND` in a module. If a phrase uses a word the speech model does not know, the log names the word.
 

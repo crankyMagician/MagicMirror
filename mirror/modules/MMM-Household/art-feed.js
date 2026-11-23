@@ -68,7 +68,7 @@ const countPictures = (folder) => {
  * @param {string} options.feedUrl the feed's HTTPS address
  * @param {string} options.folder the folder to fill
  * @param {number} [options.max] the most pictures to keep
- * @param {Function} [options.fetch] stands in for fetch in tests
+ * @param {function(string, object): Promise<object>} [options.fetch] stands in for fetch in tests
  * @returns {Promise<object>} the feed's name and date, and how many pictures the folder holds, were added and were removed
  */
 const syncFeed = async ({ feedUrl, folder, max = 100, fetch: get = fetch }) => {
@@ -131,7 +131,7 @@ const syncFeed = async ({ feedUrl, folder, max = 100, fetch: get = fetch }) => {
  * @param {object} options.feeds person -> feed address
  * @param {string} options.artDir the folder that holds one art folder per person
  * @param {object} options.log a logger with log and warn
- * @returns {Function} call it to stop checking the feeds
+ * @returns {function(): void} call it to stop checking the feeds
  */
 const addArtRoutes = (app, { feeds, artDir, log }) => {
 	const state = new Map();

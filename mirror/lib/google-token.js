@@ -51,7 +51,7 @@ const accessToken = async (tokenFile, credentialsFile, scope) => {
 	try {
 		client = JSON.parse(fs.readFileSync(credentialsFile, "utf8")).installed;
 	} catch (error) {
-		throw new Error(`cannot read the OAuth client file: ${error.message}`);
+		throw new Error(`cannot read the OAuth client file: ${error.message}`, { cause: error });
 	}
 	const response = await fetch(TOKEN_URL, {
 		method: "POST",

@@ -225,7 +225,7 @@
 			const since = setDate(art.updated);
 			const count = art.count === 1 ? "1 painting" : `${art.count} paintings`;
 			$("art-state").textContent = art.note
-				|| (art.count === 0 ? "Your frame has no paintings yet." : `Your frame shows ${count}${since ? ` from the set of ${since}` : ""}. A new set arrives every week.`);
+			  || (art.count === 0 ? "Your frame has no paintings yet." : `Your frame shows ${count}${since ? ` from the set of ${since}` : ""}. A new set arrives every week.`);
 		} catch {
 			$("art-state").textContent = "";
 		}
