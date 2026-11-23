@@ -10,6 +10,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { validRotation } = require("./rotation");
 
 const DEFAULT_BLOCKS = [
 	{ key: "morning", label: "Morning", from: "05:00" },
@@ -99,6 +100,9 @@ const defaultMirror = () => ({
 	// The voice for guests and for anyone who has not chosen one. "" is the
 	// voice named in MMM-Speak's config.
 	voice: "",
+	// Which way the picture faces, as rotation.js names it. "" leaves it to
+	// the kiosk's output.conf.
+	rotation: "",
 	quietHours: { enabled: false, from: "23:00", to: "06:00" },
 	blocks: DEFAULT_BLOCKS.map((block) => ({ ...block }))
 });
@@ -137,6 +141,9 @@ const normalizeMirror = (input) => {
 	if (validName(source.name)) {
 		mirror.name = source.name.trim();
 	}
+	if (validRotation(source.rotation)) {
+		mirror.rotation = source.rotation;
+	}
 	if (typeof source.wakePhrase === "string" && PHRASE_PATTERN.test(source.wakePhrase)) {
 		mirror.wakePhrase = source.wakePhrase;
 	}
@@ -170,6 +177,9 @@ const problemWithMirror = (input, voiceIds) => {
 	}
 	if (input.name !== undefined && !validName(input.name)) {
 		return "name must be 1 to 24 characters";
+	}
+	if (input.rotation !== undefined && !validRotation(input.rotation)) {
+		return "rotation must be one of the directions on offer";
 	}
 	if (input.wakeCandidate !== undefined && input.wakeCandidate !== "" && !(typeof input.wakeCandidate === "string" && PHRASE_PATTERN.test(input.wakeCandidate))) {
 		return "A wake phrase is one to three plain words of letters only";

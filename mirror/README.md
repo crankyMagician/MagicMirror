@@ -274,7 +274,9 @@ sudo systemctl restart magicmirror-kiosk # restart after a config change
 
 ## Rotate the screen
 
-Edit `/etc/magicmirror-kiosk/output.conf` on the Pi and restart the service. `transform 90` and `transform 270` are the two portrait directions, and `transform normal` is landscape.
+Open the settings page, go to the Mirror tab and choose under "Screen". The picture turns at once, without a restart, and the choice is kept in `profiles.json` and applied again each time the mirror starts.
+
+`/etc/magicmirror-kiosk/output.conf` on the Pi holds the direction sway starts with, before anything is chosen on the page. `transform 90` and `transform 270` are the two portrait directions, `transform normal` is landscape and `transform 180` is landscape upside down. Restart the service after editing it.
 
 ## Private values
 

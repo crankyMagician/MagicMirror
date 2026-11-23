@@ -348,3 +348,51 @@ test("the Mirror tab names the mirror and tries a new wake phrase beside the old
 	assert.equal(saved.at(-1).wakeCandidate, "");
 	assert.equal(document.getElementById("wake-cancel").hidden, true);
 });
+
+test("the Mirror tab shows which way the picture faces and saves a new direction", async (t) => {
+	const people = ["sam"];
+	const rotations = [{ value: "90", label: "Tall" }, { value: "270", label: "Tall, turned around" }, { value: "normal", label: "Wide" }, { value: "180", label: "Wide, turned around" }];
+	// Nobody has chosen yet, and the kiosk started turned around.
+	const state = { people, profiles: { sam: defaultProfile(["clock"], DEFAULT_BLOCKS) }, blocks: DEFAULT_BLOCKS, mirror: defaultMirror(), rotations, rotationNow: "270", features: [{ key: "clock", label: "Clock", owners: [] }], enrolled: [], now: { camera: false, block: "day" } };
+	const dom = new JSDOM(fs.readFileSync(path.join(__dirname, "public/settings.html"), "utf8"), { url: "http://mirror.test", runScripts: "outside-only" });
+	t.after(() => dom.window.close());
+	dom.window.structuredClone = structuredClone;
+	const saved = [];
+	dom.window.fetch = (url, options) => {
+		if (!options?.method) {
+			return Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(state)) });
+		}
+		const body = JSON.parse(options.body);
+		saved.push({ url, body });
+		return Promise.resolve({ ok: true, json: () => Promise.resolve({ mirror: body }) });
+	};
+	dom.window.eval(fs.readFileSync(path.join(__dirname, "public/settings.js"), "utf8"));
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	const document = dom.window.document;
+
+	const menu = document.getElementById("rotation");
+	assert.deepEqual([...menu.options].map((option) => option.textContent), ["Tall", "Tall, turned around", "Wide", "Wide, turned around"]);
+	assert.equal(menu.value, "270");
+	assert.equal(menu.closest("section").hidden, false);
+
+	menu.value = "normal";
+	menu.dispatchEvent(new dom.window.Event("change"));
+	await new Promise((resolve) => setTimeout(resolve, 450));
+	assert.equal(saved.at(-1).url, "/api/mirror");
+	assert.equal(saved.at(-1).body.rotation, "normal");
+});
+
+test("a mirror that does not say which way it faces offers the choice with nothing picked", async (t) => {
+	const people = ["sam"];
+	const rotations = [{ value: "90", label: "Tall" }, { value: "270", label: "Tall, turned around" }];
+	const state = { people, profiles: { sam: defaultProfile(["clock"], DEFAULT_BLOCKS) }, blocks: DEFAULT_BLOCKS, mirror: defaultMirror(), rotations, rotationNow: "", features: [{ key: "clock", label: "Clock", owners: [] }], enrolled: [], now: { camera: false, block: "day" } };
+	const dom = new JSDOM(fs.readFileSync(path.join(__dirname, "public/settings.html"), "utf8"), { url: "http://mirror.test", runScripts: "outside-only" });
+	t.after(() => dom.window.close());
+	dom.window.structuredClone = structuredClone;
+	dom.window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(state)) });
+	dom.window.eval(fs.readFileSync(path.join(__dirname, "public/settings.js"), "utf8"));
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	const menu = dom.window.document.getElementById("rotation");
+	assert.equal(menu.options[0].textContent, "As the mirror started");
+	assert.equal(menu.value, "");
+});
