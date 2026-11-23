@@ -136,3 +136,19 @@ test("viewFor shows nothing personal to nobody", () => {
 	assert.equal(view.unknown, true);
 	assert.equal(view.features, null);
 });
+
+test("themes default to dark and migrate without changing schedules", () => {
+	const profile = normalize({ blocks: { night: { clock: false } } }, FEATURES, DEFAULT_BLOCKS);
+	assert.equal(profile.theme, "dark");
+	assert.equal(profile.blocks.night.clock, false);
+	assert.equal(normalize({ theme: "light" }, FEATURES, DEFAULT_BLOCKS).theme, "light");
+	assert.match(problemWith({ blocks: {}, theme: "automatic" }, FEATURES, DEFAULT_BLOCKS), /theme/);
+});
+
+test("themes follow the recognized person and return to dark in quiet hours or for a guest", () => {
+	const profile = normalize({ theme: "light", quietHours: { enabled: true, from: "23:00", to: "06:00" } }, FEATURES, DEFAULT_BLOCKS);
+	assert.equal(viewFor({ person: "heather", profile, blocks: DEFAULT_BLOCKS }, at("12:00")).theme, "light");
+	assert.equal(viewFor({ person: "heather", profile, blocks: DEFAULT_BLOCKS }, at("23:30")).theme, "dark");
+	assert.equal(viewFor({ person: "guest", profile: null, blocks: DEFAULT_BLOCKS }, at("12:00")).theme, "dark");
+	assert.equal(viewFor({ person: "sam", profile: normalize({}, FEATURES, DEFAULT_BLOCKS), blocks: DEFAULT_BLOCKS }, at("12:00")).theme, "dark");
+});

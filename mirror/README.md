@@ -40,12 +40,12 @@ node --test "mirror/modules/**/*.test.js"
 
 `MMM-Voice` listens through the webcam's microphone for phrases that start with "mirror". `services/voice.py` recognizes them on the Pi with Vosk and a fixed phrase list, so the recognizer can only answer with a listed phrase. Audio stays in memory and never leaves the Pi. A short tone on the speaker confirms each command.
 
-| Say | What happens |
-|---|---|
-| "Mirror, wake up" | The screen turns on. With nobody recognized it shows the shared view for five minutes. It also overrides quiet hours |
-| "Mirror, good night" | The screen turns off and stays off until you walk away and come back |
-| "Mirror, show the calendar" / "Mirror, hide news" | Shows or hides one feature until you leave. The names are in `MMM-Voice`'s `features` option in `config.js` |
-| "Mirror, good morning" / "Mirror, what is the weather" | Recognized and broadcast as `VOICE_COMMAND`. Nothing answers yet |
+| Say                                                    | What happens                                                                                                         |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| "Mirror, wake up"                                      | The screen turns on. With nobody recognized it shows the shared view for five minutes. It also overrides quiet hours |
+| "Mirror, good night"                                   | The screen turns off and stays off until you walk away and come back                                                 |
+| "Mirror, show the calendar" / "Mirror, hide news"      | Shows or hides one feature until you leave. The names are in `MMM-Voice`'s `features` option in `config.js`          |
+| "Mirror, good morning" / "Mirror, what is the weather" | Recognized and broadcast as `VOICE_COMMAND`. Nothing answers yet                                                     |
 
 To add a command, add an id and its phrases to `MMM-Voice`'s `commands` option and handle `VOICE_COMMAND` in a module. If a phrase uses a word the speech model does not know, the log names the word.
 
@@ -62,7 +62,7 @@ The webcam watches for faces. `services/presence.py` detects them with OpenCV's 
 In `config.js`, a module with a person's name in its `classes` shows only for that person. A module without one is shared.
 
 ```js
-{ module: "calendar", classes: "heather", ... }
+const moduleConfig = { module: "calendar", classes: "heather", position: "top_left" };
 ```
 
 - A recognized person sees their modules and the shared ones.
@@ -140,6 +140,26 @@ sudo systemctl restart magicmirror-kiosk # restart after a config change
 Edit `/etc/magicmirror-kiosk/output.conf` on the Pi and restart the service. `transform 90` and `transform 270` are the two portrait directions, and `transform normal` is landscape.
 
 ## Private values
+
+### Network devices and themes
+
+`MMM-UniFi` lives in the private repository [crankyMagician/MMM-UniFi](https://github.com/crankyMagician/MMM-UniFi), pinned in `mirror/modules.lock`. Both Sam and Heather can switch **Network devices** on or off for each time block. The mirror cycles through every connected client grouped by network, then the UniFi hardware.
+
+Open **Network devices** from `http://mirror.local:8081/` for the full searchable inventory. Only the dashboard's fixed GET routes are forwarded to the localhost MagicMirror server; the controller credentials and raw responses stay on the Pi.
+
+The **Appearance** selector on each person's settings page chooses dark or light mode for the whole mirror. Existing profiles default to dark, and guests use dark mode. Heather's accent adapts to the selected theme. The dashboard inherits the selected profile's theme when opened; its own theme button changes only that browser view.
+
+Before installing the private module on a new Pi:
+
+1. Generate a dedicated Ed25519 key at `~/.ssh/mmm-unifi-deploy` and add its public key to the private repository as a **read-only deploy key**. Verify GitHub's SSH host key in `known_hosts`. The module installer uses this key only for MMM-UniFi. `UNIFI_DEPLOY_KEY` may override its path.
+2. Create `~/mirror-data/unifi.json` with `username` and `password` from the existing **Sam Dev → Unifi API** 1Password item. Set mode `600` and ownership to the mirror user. Never commit it or put it in the web root.
+3. Run `mirror/deploy/install-modules.sh` as the mirror user and restart the kiosk. The configured local controller is `https://192.168.1.1`, site `default`; its self-signed certificate is allowed only by this module.
+
+The module needs no runtime npm dependencies. Its separate repository documents the API, tests and configuration. To roll back, restore the previous `mirror/modules.lock` pin and matching household configuration, rerun the installer and restart; profile preferences and credentials remain outside the repository.
+
+The directory alternatives reviewed were MMM-NetworkScanner/MMM-MacAddressScan (presence scanning), the UniFi guest/voucher modules (guest access), and MMM-UniFiProtect (cameras). None covered a complete controller inventory with network membership and phone browsing.
+
+### Weather and calendars
 
 `~/MagicMirror/config/config.env` holds the home coordinates for the weather and the calendar's iCal link. `config.env.sample` lists the names. MagicMirror hides names that start with `SECRET_` from the browser.
 

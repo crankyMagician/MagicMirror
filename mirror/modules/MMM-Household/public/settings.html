@@ -1,51 +1,69 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="color-scheme" content="dark" />
-		<title>Mirror settings</title>
-		<link rel="stylesheet" href="settings.css" />
-	</head>
-	<body>
-		<main>
-			<header>
-				<h1>Mirror</h1>
-				<p id="live" class="live">Connecting to the mirror</p>
-			</header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Mirror settings</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Mirror</h1>
+        <p id="live" class="live">Connecting to the mirror</p>
+      </header>
 
-			<nav id="people" class="people" aria-label="Whose settings"></nav>
+      <nav id="people" class="people" aria-label="Whose settings"></nav>
 
-			<section aria-labelledby="schedule-title">
-				<h2 id="schedule-title">What I see</h2>
-				<p class="hint">Choose what the mirror shows you in each part of the day.</p>
-				<div class="scroll">
-					<table id="grid"></table>
-				</div>
-			</section>
+      <section aria-labelledby="appearance-title">
+        <h2 id="appearance-title">Appearance</h2>
+        <p class="hint">The whole mirror uses your theme when it recognizes you.</p>
+        <label class="row"
+          >Theme
+          <select id="theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select></label
+        >
+      </section>
 
-			<section aria-labelledby="quiet-title">
-				<h2 id="quiet-title">Quiet hours</h2>
-				<p class="hint">During quiet hours the screen stays off when the mirror sees you.</p>
-				<label class="row">
-					<span>Use quiet hours</span>
-					<input id="quiet-enabled" type="checkbox" />
-				</label>
-				<div class="row times">
-					<label>From <input id="quiet-from" type="time" /></label>
-					<label>To <input id="quiet-to" type="time" /></label>
-				</div>
-			</section>
+      <section id="network-section" aria-labelledby="network-title" hidden>
+        <h2 id="network-title">Network devices</h2>
+        <p class="hint">Browse every connected device and see which network it uses.</p>
+        <a id="network-link" href="/unifi/">Open network devices →</a>
+      </section>
 
-			<section aria-labelledby="face-title">
-				<h2 id="face-title">My face</h2>
-				<p id="face-state" class="hint"></p>
-				<button id="enroll" type="button">Teach the mirror my face</button>
-				<p id="enroll-note" class="hint" role="status"></p>
-			</section>
+      <section aria-labelledby="schedule-title">
+        <h2 id="schedule-title">What I see</h2>
+        <p class="hint">Choose what the mirror shows you in each part of the day.</p>
+        <div class="scroll">
+          <table id="grid"></table>
+        </div>
+      </section>
 
-			<p id="saved" class="saved" role="status"></p>
-		</main>
-		<script src="settings.js"></script>
-	</body>
+      <section aria-labelledby="quiet-title">
+        <h2 id="quiet-title">Quiet hours</h2>
+        <p class="hint">During quiet hours the screen stays off when the mirror sees you.</p>
+        <label class="row">
+          <span>Use quiet hours</span>
+          <input id="quiet-enabled" type="checkbox" />
+        </label>
+        <div class="row times">
+          <label>From <input id="quiet-from" type="time" /></label>
+          <label>To <input id="quiet-to" type="time" /></label>
+        </div>
+      </section>
+
+      <section aria-labelledby="face-title">
+        <h2 id="face-title">My face</h2>
+        <p id="face-state" class="hint"></p>
+        <button id="enroll" type="button">Teach the mirror my face</button>
+        <p id="enroll-note" class="hint" role="status"></p>
+      </section>
+
+      <p id="saved" class="saved" role="status"></p>
+    </main>
+    <script src="settings.js"></script>
+  </body>
 </html>

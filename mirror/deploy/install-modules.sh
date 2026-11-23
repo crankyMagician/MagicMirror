@@ -16,11 +16,22 @@ while read -r name url commit install; do
 		echo "skip $name: modules/$name is a link to one of our own modules" >&2
 		continue
 	fi
+	git_options=(-c credential.interactive=false)
+	if [ "$name" = "MMM-UniFi" ]; then
+		# This repository is private. Use its own read-only deploy key, never
+		# a GitHub token embedded in the lock file or clone URL.
+		key="${UNIFI_DEPLOY_KEY:-$HOME/.ssh/mmm-unifi-deploy}"
+		if [ ! -r "$key" ]; then
+			echo "Missing MMM-UniFi deploy key at $key (see mirror/README.md)." >&2
+			exit 1
+		fi
+		git_options=(-c "core.sshCommand=ssh -i '$key' -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes")
+	fi
 	if [ ! -d "$dir/.git" ]; then
-		git clone --quiet "$url" "$dir"
+		git "${git_options[@]}" clone --quiet "$url" "$dir"
 	fi
 	if [ "$(git -C "$dir" rev-parse HEAD)" != "$commit" ]; then
-		git -C "$dir" cat-file -e "$commit^{commit}" 2>/dev/null || git -C "$dir" fetch --quiet origin
+		git -C "$dir" cat-file -e "$commit^{commit}" 2>/dev/null || git "${git_options[@]}" -C "$dir" fetch --quiet origin
 		git -C "$dir" checkout --quiet --detach "$commit"
 		rm -rf "$dir/node_modules"
 	fi

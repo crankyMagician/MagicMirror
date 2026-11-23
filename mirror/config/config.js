@@ -6,7 +6,7 @@
  * not committed (see config.env.sample). MagicMirror hides any name that
  * starts with SECRET_ from the copy of this config it sends to the browser.
  */
-let config = {
+const config = {
 	// MagicMirror answers only on the Pi itself. The settings page that phones
 	// open is served separately by MMM-Household (see settingsPort below).
 	address: "localhost",
@@ -37,6 +37,7 @@ let config = {
 				settingsAllow: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
 				// Names on the settings page for the third-party modules below.
 				labels: {
+					unifi: "Network devices",
 					"MMM-MoonPhase": "Moon",
 					"MMM-APOD": "Space picture",
 					"MMM-CoupleDays": "Days together",
@@ -170,6 +171,7 @@ let config = {
 				// The countdowns are private, so they live in config.env as JSON:
 				// [{"title": "...", "targetTime": "2026-12-25", "repeat": "yearly", "unit": "day"}]
 				// A title cannot contain a single quote.
+				// eslint-disable-next-line @stylistic/quotes -- Substituted JSON contains double quotes.
 				events: JSON.parse('${MIRROR_EVENTS}')
 			}
 		},
@@ -202,6 +204,21 @@ let config = {
 					afternoon: ["You are doing great today.", "Super effective, as always."],
 					evening: ["Welcome home, Heather.", "You made today better."]
 				}
+			}
+		},
+		{
+			module: "MMM-UniFi",
+			classes: "sam heather feature-unifi",
+			position: "middle_center",
+			config: {
+				controllerUrl: "https://192.168.1.1",
+				site: "default",
+				credentialsFile: "~/mirror-data/unifi.json",
+				// The local controller uses its own self-signed certificate.
+				allowSelfSigned: true,
+				theme: "inherit",
+				pageSize: 6,
+				rotationInterval: 12000
 			}
 		},
 		{
