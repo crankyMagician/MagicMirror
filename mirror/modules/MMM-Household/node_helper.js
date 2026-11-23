@@ -6,7 +6,7 @@ const readline = require("node:readline");
 const express = require("express");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const { createLogin, hostAllowed } = require("../../lib/household-login");
+const { createLogin, hostAllowed, mayActFor, ownOnly } = require("../../lib/household-login");
 const { ProfileStore, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
 const { addUniFiRoutes } = require("./unifi-routes");
 const { addPhotoRoutes } = require("./photos-routes");
@@ -162,18 +162,20 @@ module.exports = NodeHelper.create({
 				return;
 			}
 			const view = this.computeView(new Date());
+			// A signed-in person gets their own settings and nobody else's.
+			const people = this.config.people.filter((name) => mayActFor(req.login, name));
 			res.json({
-				people: this.config.people,
+				people,
 				enrolled: this.enrolled,
 				blocks: this.blocks,
 				mirror: this.mirror,
 				features: this.features,
-				profiles: Object.fromEntries(this.config.people.map((name) => [name, this.profileOf(name)])),
+				profiles: Object.fromEntries(people.map((name) => [name, this.profileOf(name)])),
 				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, theme: view.theme, screenOn: this.screenOn, camera: this.presence !== null }
 			});
 		});
 
-		app.put("/api/profiles/:name", jsonOnly, json, (req, res) => {
+		app.put("/api/profiles/:name", ownOnly((req) => req.params.name), jsonOnly, json, (req, res) => {
 			const name = req.params.name;
 			if (!this.config || !this.config.people.includes(name)) {
 				res.status(404).json({ error: "Nobody on this mirror has that name" });
@@ -217,7 +219,7 @@ module.exports = NodeHelper.create({
 			res.json({ mirror: this.mirror });
 		});
 
-		app.post("/api/enroll", jsonOnly, json, (req, res) => {
+		app.post("/api/enroll", jsonOnly, json, ownOnly((req) => String((req.body && req.body.name) || "")), (req, res) => {
 			const name = String((req.body && req.body.name) || "");
 			if (!this.config || !this.config.people.includes(name)) {
 				res.status(400).json({ error: "Give the name of someone on this mirror" });
@@ -238,12 +240,14 @@ module.exports = NodeHelper.create({
 			googleDir: path.join(DATA_DIR, "google"),
 			photosDir: path.join(DATA_DIR, "photos"),
 			guards: [jsonOnly, json],
+			own: ownOnly((req) => req.params.person),
 			log: Log
 		});
 
 		// A person's frame can show paintings from a published feed instead.
 		this.stopArt = addArtRoutes(app, {
 			feeds: this.getServerModuleConfig().artFeeds || {},
+			own: ownOnly((req) => req.params.person),
 			artDir: path.join(DATA_DIR, "art"),
 			log: Log
 		});

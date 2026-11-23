@@ -1,7 +1,7 @@
 // Run with: node --test "mirror/**/*.test.js"
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { cookieValue, createLogin, hostAllowed } = require("./household-login");
+const { cookieValue, createLogin, hostAllowed, mayActFor, ownOnly } = require("./household-login");
 
 const AUTH = "https://auth.home.example";
 const ACCOUNTS = { "Sam@Example.org": "sam", "heather@example.org": "heather" };
@@ -132,4 +132,35 @@ test("the middleware answers the refusal as JSON and passes a signed-in person o
 	await login.middleware(req, res, () => { passed = true; });
 	assert.equal(passed, true);
 	assert.equal(req.login.person, "sam");
+});
+
+test("a signed-in person may act for themselves only", () => {
+	assert.equal(mayActFor({ person: "sam", email: "sam@example.org" }, "sam"), true);
+	assert.equal(mayActFor({ person: "sam", email: "sam@example.org" }, "heather"), false);
+	// Login off, or a request made on the mirror itself: nobody is signed in.
+	assert.equal(mayActFor(undefined, "heather"), true);
+	assert.equal(mayActFor({ person: null, local: true }, "heather"), true);
+});
+
+test("ownOnly refuses a request about someone else and passes one's own", () => {
+	const guard = ownOnly((req) => req.params.name);
+	const run = (login, name) => {
+		const answer = { passed: false };
+		const res = {
+			status (code) {
+				answer.code = code;
+				return this;
+			},
+			json (body) {
+				answer.body = body;
+			}
+		};
+		guard({ login, params: { name } }, res, () => {
+			answer.passed = true;
+		});
+		return answer;
+	};
+	assert.deepEqual(run({ person: "heather" }, "sam"), { passed: false, code: 403, body: { error: "You can change only your own settings" } });
+	assert.deepEqual(run({ person: "heather" }, "heather"), { passed: true });
+	assert.deepEqual(run(undefined, "sam"), { passed: true });
 });

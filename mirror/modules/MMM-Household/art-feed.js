@@ -130,10 +130,11 @@ const syncFeed = async ({ feedUrl, folder, max = 100, fetch: get = fetch }) => {
  * @param {object} options where things are
  * @param {object} options.feeds person -> feed address
  * @param {string} options.artDir the folder that holds one art folder per person
+ * @param {function(object, object, function(): void): void} [options.own] middleware that keeps a signed-in person to their own frame
  * @param {object} options.log a logger with log and warn
  * @returns {function(): void} call it to stop checking the feeds
  */
-const addArtRoutes = (app, { feeds, artDir, log }) => {
+const addArtRoutes = (app, { feeds, artDir, own = (req, res, next) => next(), log }) => {
 	const state = new Map();
 	const timers = new Map();
 
@@ -160,7 +161,7 @@ const addArtRoutes = (app, { feeds, artDir, log }) => {
 		check(person);
 	}
 
-	app.get("/api/art/:person", (req, res) => {
+	app.get("/api/art/:person", own, (req, res) => {
 		if (!Object.hasOwn(feeds, req.params.person)) {
 			res.status(404).json({ error: "This person has no art feed" });
 			return;
