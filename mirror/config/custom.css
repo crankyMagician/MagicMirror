@@ -46,6 +46,10 @@
   background-color: var(--color-background);
 }
 
+:root[data-theme="light"] .MMM-CoupleDays .couple-days-content {
+  color: var(--color-text);
+}
+
 /* Make room for the inventory without overlapping the greeting or the
  * bottom columns. These positions apply only while the panel is visible. */
 body:has(.MMM-UniFi:not(.hidden)) .region.upper.third {
@@ -57,14 +61,68 @@ body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
   letter-spacing: 0;
 }
 
+body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-wrapper {
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-canvas {
+  width: 60px;
+  height: 60px;
+}
+
 @media (orientation: portrait) {
   body:has(.MMM-UniFi:not(.hidden)) .region.middle.center {
-    top: 41%;
+    top: 42%;
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .region.top.right {
+    --gap-modules: 16px;
+  }
+
+  .MMM-UniFi .unifi-mirror .unifi-rows {
+    min-height: 360px;
+  }
+
+  .MMM-UniFi .unifi-mirror .unifi-row {
+    padding: 5px 0;
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
+    max-width: 300px;
+    margin-inline: auto;
+    font-size: 30px;
+    line-height: 1.15;
   }
 }
 
 /* Leave a readable central area in the landscape bench layout. */
 @media (orientation: landscape) {
+  body:has(.MMM-UniFi:not(.hidden)) .region.top.left,
+  body:has(.MMM-UniFi:not(.hidden)) .region.top.right,
+  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.left,
+  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.right {
+    --gap-modules: 16px;
+    transform: scale(0.85);
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .region.top.left {
+    transform-origin: top left;
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .region.top.right {
+    transform-origin: top right;
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.left {
+    transform-origin: bottom left;
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.right {
+    transform-origin: bottom right;
+  }
+
   body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
     font-size: 30px;
   }
