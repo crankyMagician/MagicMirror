@@ -100,7 +100,10 @@ const config = {
 				absentDelay: 60,
 				// The settings page: http://mirror.local:8081/ from the home network.
 				settingsPort: 8081,
-				settingsAllow: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
+				// Addresses that may reach the settings page. The mirror itself
+				// always may. MIRROR_SETTINGS_ALLOW in config.env replaces the two
+				// home subnets, for example with the one address of an HTTPS proxy.
+				settingsAllow: ["127.0.0.1", "::1"].concat((process.env.MIRROR_SETTINGS_ALLOW || "192.168.1.0/24,192.168.10.0/24").split(",").map((entry) => entry.trim()).filter(Boolean)),
 				// The household login server. Empty values in config.env leave the
 				// page without login, guarded by the network filter alone.
 				login: {

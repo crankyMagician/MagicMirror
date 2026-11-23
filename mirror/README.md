@@ -203,6 +203,7 @@ MIRROR_ACCOUNTS='{"someone@example.org": "sam", "partner@example.org": "heather"
 - The login server sets a cookie for the whole home domain when someone signs in. The browser sends it to the mirror too, and the mirror asks the login server whose it is (`GET /api/v1/auth/me`). The mirror holds no secret of the login server. An answer is reused for a minute.
 - Only an account listed in `MIRROR_ACCOUNTS` gets in. A signed-in person sees and changes their own settings only: their theme, what they see, their face and their photos. Asking for someone else's answers 403. The Mirror tab is shared, and either person can change it. Any other signed-in account is told it is not one of the mirror's people.
 - People open `https://MIRROR_SETTINGS_HOST/`. Opened at a bare address, the page only points there, because the cookie belongs to that name.
+- The HTTPS name is served by a proxy in front of the mirror's plain HTTP port. Set `MIRROR_SETTINGS_ALLOW` to the proxy's address, and that port answers the proxy and the mirror itself and nobody else, so a password or a cookie never crosses the Wi-Fi unencrypted.
 - The sign-in form on the page sends the password straight to the login server and never to the mirror. A sign-in lasts an hour and the page renews it without asking.
 - If the login server does not answer, the page is closed until it does. The mirror itself keeps running. Requests made on the Pi itself (`curl http://localhost:8081/...` over SSH) need no login, which is the way back in.
 
