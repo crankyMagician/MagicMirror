@@ -6,7 +6,7 @@ const readline = require("node:readline");
 const express = require("express");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const { DEFAULT_BLOCKS, ProfileStore, currentBlock, inRange, problemWith } = require("./profiles");
+const { DEFAULT_BLOCKS, ProfileStore, problemWith, viewFor } = require("./profiles");
 
 const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-data");
 const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
@@ -26,6 +26,10 @@ module.exports = NodeHelper.create({
 		this.blocks = DEFAULT_BLOCKS;
 		this.store = new ProfileStore(PROFILES_FILE);
 		this.lastView = "";
+		// Set by voice commands. They last until the person leaves.
+		this.wakeUntil = 0;
+		this.asleep = null;
+		this.overrides = {};
 		this.screenOn = true;
 		this.offTimer = null;
 		this.restartDelay = 2000;
@@ -169,7 +173,42 @@ module.exports = NodeHelper.create({
 			this.features = payload;
 			this.lastView = "";
 			this.refresh();
+		} else if (notification === "VOICE") {
+			this.handleVoice(payload);
 		}
+	},
+
+	/**
+	 * Acts on a spoken command relayed from MMM-Voice.
+	 * @param {object} command the command, with an `id` such as "wake_up" or "hide:calendar"
+	 */
+	handleVoice (command) {
+		if (!this.config || !command || typeof command.id !== "string") {
+			return;
+		}
+		const [action, feature] = command.id.split(":");
+		if (action === "wake_up") {
+			this.asleep = null;
+			this.wakeUntil = Date.now() + this.config.wakeMinutes * 60 * 1000;
+			Log.log("Voice: wake up");
+		} else if (action === "good_night") {
+			this.wakeUntil = 0;
+			this.asleep = this.person;
+			Log.log("Voice: good night");
+			this.refresh();
+			// Do not wait out the absent delay. They asked for the dark.
+			this.cancelScreenOff();
+			if (this.presence) {
+				this.setScreen(false);
+			}
+			return;
+		} else if ((action === "show" || action === "hide") && this.features.some((known) => known.key === feature)) {
+			this.overrides[feature] = action === "show";
+			Log.log(`Voice: ${action} ${feature}`);
+		} else {
+			return;
+		}
+		this.refresh();
 	},
 
 	/**
@@ -192,20 +231,16 @@ module.exports = NodeHelper.create({
 	 * @returns {object} who the view is for, the block of the day and that person's feature switches
 	 */
 	computeView (now) {
-		const block = currentBlock(this.blocks, now).key;
-		const view = { person: this.person, unknown: this.unknown, quiet: false, block, features: null };
-		if (this.person && this.config && this.config.people.includes(this.person)) {
-			const profile = this.profileOf(this.person);
-			const quiet = profile.quietHours;
-			if (quiet.enabled && inRange(quiet.from, quiet.to, now)) {
-				// In quiet hours the mirror treats the person as absent.
-				view.person = null;
-				view.quiet = true;
-			} else {
-				view.features = profile.blocks[block];
-			}
-		}
-		return view;
+		const hasProfile = this.person && this.config && this.config.people.includes(this.person);
+		return viewFor({
+			person: this.person,
+			unknown: this.unknown,
+			profile: hasProfile ? this.profileOf(this.person) : null,
+			blocks: this.blocks,
+			wakeUntil: this.wakeUntil,
+			asleep: this.asleep,
+			overrides: this.overrides
+		}, now);
 	},
 
 	/**
@@ -313,6 +348,9 @@ module.exports = NodeHelper.create({
 	setPerson (person, unknown = false) {
 		if (person !== this.person) {
 			Log.log(`Present: ${person || (unknown ? "an unknown face" : "nobody")}`);
+			// What a person asked for by voice ends when they leave.
+			this.asleep = null;
+			this.overrides = {};
 		}
 		this.person = person;
 		this.unknown = Boolean(unknown);

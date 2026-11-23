@@ -51,6 +51,28 @@ let config = {
 			}
 		},
 		{
+			// Offline voice commands: "mirror, wake up", "mirror, good night",
+			// "mirror, show the calendar", "mirror, hide news". It draws nothing.
+			module: "MMM-Voice",
+			config: {
+				// Spoken name -> feature, for "show NAME" and "hide NAME".
+				features: {
+					calendar: "calendar",
+					weather: "weather",
+					forecast: "forecast",
+					news: "newsfeed",
+					compliments: "compliments",
+					moon: "MMM-MoonPhase",
+					"air quality": "MMM-AirQuality",
+					countdown: "MMM-CountEvents",
+					pokemon: "MMM-DailyPokemon",
+					"word of the day": "MMM-WordOfTheDay",
+					history: "MMM-History",
+					"space picture": "MMM-APOD"
+				}
+			}
+		},
+		{
 			module: "clock",
 			position: "top_left"
 		},

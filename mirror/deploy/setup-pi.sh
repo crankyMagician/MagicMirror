@@ -47,7 +47,7 @@ apt_get install --no-install-recommends \
 	libgtk-3-0t64 libnss3 libasound2t64 libxss1 libxtst6 libnotify4 \
 	fonts-dejavu-core fonts-noto-color-emoji \
 	avahi-daemon dbus-user-session \
-	python3-venv v4l-utils alsa-utils
+	python3-venv v4l-utils alsa-utils libatomic1
 
 echo "==> MagicMirror dependencies"
 as_user "cd '$MM_DIR' && npm run install-mm"
@@ -92,6 +92,20 @@ as_user "
 	fetch_model face_detection_yunet face_detection_yunet_2023mar.onnx
 	fetch_model face_recognition_sface face_recognition_sface_2021dec.onnx
 	cd '$DATA_DIR/models' && sha256sum -c '$DEPLOY_DIR/models.sha256'
+"
+
+echo "==> Speech recognition model"
+VOSK_MODEL=vosk-model-small-en-us-0.15
+VOSK_SHA256=30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
+as_user "
+	set -e
+	cd '$DATA_DIR/models'
+	if [ ! -d $VOSK_MODEL ]; then
+		curl -fsSL -o $VOSK_MODEL.zip https://alphacephei.com/vosk/models/$VOSK_MODEL.zip
+		echo '$VOSK_SHA256  $VOSK_MODEL.zip' | sha256sum -c -
+		python3 -c \"import zipfile; zipfile.ZipFile('$VOSK_MODEL.zip').extractall('.')\"
+		rm $VOSK_MODEL.zip
+	fi
 "
 
 echo "==> AppArmor profile for the Electron sandbox"

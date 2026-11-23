@@ -1,4 +1,4 @@
-/* Run with: node --test mirror/modules/ */
+// Run with: node --test "mirror/modules/**/*.test.js"
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test } = require("node:test");

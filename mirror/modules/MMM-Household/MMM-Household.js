@@ -24,6 +24,8 @@ Module.register("MMM-Household", {
 		absentDelay: 60,
 		// Seconds a person stays current after the camera last saw them.
 		holdSeconds: 8,
+		// Minutes the mirror stays on after a spoken "wake up" with nobody recognized.
+		wakeMinutes: 5,
 		camera: "/dev/video0",
 		// Milliseconds for the fade when modules appear and disappear.
 		fadeSpeed: 800,
@@ -53,11 +55,14 @@ Module.register("MMM-Household", {
 		this.sendSocketNotification("CONFIG", this.config);
 	},
 
-	notificationReceived (notification) {
+	notificationReceived (notification, payload) {
 		if (notification === "DOM_OBJECTS_CREATED") {
 			this.domReady = true;
 			this.sendSocketNotification("FEATURES", this.listFeatures());
 			this.applyView();
+		} else if (notification === "VOICE_COMMAND") {
+			// From MMM-Voice: wake up, good night, and show or hide a feature.
+			this.sendSocketNotification("VOICE", payload);
 		}
 	},
 
