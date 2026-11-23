@@ -1,7 +1,7 @@
 // Run with: node --test "mirror/**/*.test.js"
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { durationMs, fileNameFor, photosIn } = require("./photos-routes");
+const { durationMs, fileNameFor, imageKind, photosIn } = require("./photos-routes");
 
 test("durationMs reads Google's seconds format and stays within bounds", () => {
 	assert.equal(durationMs("5s", 9000), 5000);
@@ -28,4 +28,12 @@ test("photosIn keeps photos with a download address and drops the rest", () => {
 	];
 	assert.deepEqual(photosIn(items), [{ id: "a", baseUrl: "https://lh3.example/a" }]);
 	assert.deepEqual(photosIn(undefined), []);
+});
+
+test("imageKind keeps JPEG and PNG and refuses everything else", () => {
+	assert.equal(imageKind(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00])), "jpg");
+	assert.equal(imageKind(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])), "png");
+	assert.equal(imageKind(Buffer.from("GIF89a-and-more")), null);
+	assert.equal(imageKind(Buffer.alloc(0)), null);
+	assert.match(fileNameFor("a", "png"), /^[0-9a-f]{24}\.png$/);
 });

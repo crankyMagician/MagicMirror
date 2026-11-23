@@ -28,13 +28,34 @@ const durationMs = (value, fallback) => {
 	return Math.min(60000, Math.max(1000, ms));
 };
 
+const KINDS = ["jpg", "png"];
+const isPhotoFile = (name) => KINDS.some((kind) => name.endsWith(`.${kind}`));
+
 /**
  * Names the file a picked photo is stored as. The same photo always gets the
  * same name, so picking it twice does not store it twice.
  * @param {string} id the media item's id
+ * @param {string} [kind] the file extension, "jpg" or "png"
  * @returns {string} a file name
  */
-const fileNameFor = (id) => `${crypto.createHash("sha256").update(String(id)).digest("hex").slice(0, 24)}.jpg`;
+const fileNameFor = (id, kind = "jpg") => `${crypto.createHash("sha256").update(String(id)).digest("hex").slice(0, 24)}.${kind}`;
+
+/**
+ * Tells what kind of picture a download is, from its first bytes. Google
+ * sends some picked items back as GIF animations, which the slideshow
+ * module cannot read, so only JPEG and PNG are kept.
+ * @param {Buffer} data the downloaded bytes
+ * @returns {string|null} "jpg", "png", or null for anything else
+ */
+const imageKind = (data) => {
+	if (data.length > 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
+		return "jpg";
+	}
+	if (data.length > 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+		return "png";
+	}
+	return null;
+};
 
 /**
  * Keeps the picked items that are photos with a download address.
@@ -47,7 +68,7 @@ const photosIn = (items) => (items || [])
 
 const countPhotos = (directory) => {
 	try {
-		return fs.readdirSync(directory).filter((name) => name.endsWith(".jpg")).length;
+		return fs.readdirSync(directory).filter(isPhotoFile).length;
 	} catch {
 		return 0;
 	}
@@ -89,12 +110,12 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 		const folder = folderOf(person);
 		fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
 		let added = 0;
+		let skipped = 0;
 		for (const photo of photos) {
 			if (countPhotos(folder) >= maxPhotos) {
 				break;
 			}
-			const file = path.join(folder, fileNameFor(photo.id));
-			if (fs.existsSync(file)) {
+			if (KINDS.some((kind) => fs.existsSync(path.join(folder, fileNameFor(photo.id, kind))))) {
 				continue;
 			}
 			// "=w1600-h1600" asks Google for a copy that fits in 1600 by 1600 pixels.
@@ -103,11 +124,18 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 				log.warn(`A photo for ${person} could not be downloaded: ${response.status}`);
 				continue;
 			}
-			fs.writeFileSync(`${file}.tmp`, Buffer.from(await response.arrayBuffer()), { mode: 0o600 });
+			const data = Buffer.from(await response.arrayBuffer());
+			const kind = imageKind(data);
+			if (!kind) {
+				skipped += 1;
+				continue;
+			}
+			const file = path.join(folder, fileNameFor(photo.id, kind));
+			fs.writeFileSync(`${file}.tmp`, data, { mode: 0o600 });
 			fs.renameSync(`${file}.tmp`, file);
 			added += 1;
 		}
-		return added;
+		return { added, skipped };
 	};
 
 	/** Waits for the person to finish picking, then downloads what they chose. */
@@ -136,11 +164,12 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 				photos.push(...photosIn(list.mediaItems));
 				page = list.nextPageToken || "";
 			} while (page);
-			const added = await download(person, token, photos);
+			const { added, skipped } = await download(person, token, photos);
 			await call(token, "DELETE", `/sessions/${encodeURIComponent(session.id)}`).catch(() => {});
-			log.log(`Added ${added} photos for ${person}`);
+			log.log(`Added ${added} photos for ${person}, skipped ${skipped}`);
 			if (!superseded()) {
-				state.set(person, { picking: false, note: added === 1 ? "Added 1 photo." : `Added ${added} photos.` });
+				const left = skipped > 0 ? ` Left out ${skipped} that ${skipped === 1 ? "is" : "are"} not a still photo.` : "";
+				state.set(person, { picking: false, note: `${added === 1 ? "Added 1 photo." : `Added ${added} photos.`}${left}` });
 			}
 		} catch (error) {
 			if (superseded()) {
@@ -189,7 +218,7 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 		let removed = 0;
 		try {
 			for (const name of fs.readdirSync(folder)) {
-				if (name.endsWith(".jpg")) {
+				if (isPhotoFile(name)) {
 					fs.rmSync(path.join(folder, name), { force: true });
 					removed += 1;
 				}
@@ -203,4 +232,4 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 	});
 };
 
-module.exports = { addPhotoRoutes, durationMs, fileNameFor, photosIn };
+module.exports = { addPhotoRoutes, durationMs, fileNameFor, imageKind, photosIn };
