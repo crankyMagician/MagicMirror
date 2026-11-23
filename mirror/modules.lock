@@ -19,4 +19,4 @@ MMM-PokemonGOEvents     https://github.com/crankyMagician/MMM-PokemonGOEvents  b
 MMM-DailyPokemon        https://github.com/crankyMagician/MMM-DailyPokemon     3860e086dd1e9e3dac8824a03d66dc9fb5cd1088  none
 
 # Private standalone module; install-modules.sh uses its read-only deploy key.
-MMM-UniFi                git@github.com:crankyMagician/MMM-UniFi.git          36770c61071eddbfdd528cbcd71911279c653f84  none
+MMM-UniFi                git@github.com:crankyMagician/MMM-UniFi.git          4bfca7a8779a32f845a590bbe4c53898c53bf381  none
