@@ -127,6 +127,15 @@ body {
   flex: 0 0 auto;
 }
 
+/* "Mirror, show only the calendar": MMM-Household moves that one module to
+ * the middle of the screen and enlarges it. The columns stop cutting off at
+ * their edges for as long as it is there. */
+body.household-focus .region.top.left,
+body.household-focus .region.top.right,
+body.household-focus .region.bottom.bar > .container {
+  overflow: visible;
+}
+
 /* The news keeps one height, so a long headline does not resize the columns. */
 .region.bottom.bar > .container {
   height: var(--mirror-news);

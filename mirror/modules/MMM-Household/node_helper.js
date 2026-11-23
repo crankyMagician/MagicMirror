@@ -9,7 +9,7 @@ const Log = require("logger");
 const { createLogin, hostAllowed, mayActFor, ownOnly } = require("../../lib/household-login");
 const { DEFAULTS: SPEAK_DEFAULTS } = require("../MMM-Speak/speech");
 const { createSynth } = require("../MMM-Speak/synth");
-const { ProfileStore, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
+const { ProfileStore, canFocus, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
 const { ROTATIONS, currentRotation, swayArguments } = require("./rotation");
 const { addUniFiRoutes } = require("./unifi-routes");
 const { addVoiceRoutes, voicesOn } = require("./voice-routes");
@@ -45,6 +45,9 @@ module.exports = NodeHelper.create({
 		this.wakeUntil = 0;
 		this.asleep = null;
 		this.overrides = {};
+		// The one feature someone asked to see alone, and the timer that ends it.
+		this.focus = null;
+		this.focusTimer = null;
 		this.screenOn = true;
 		this.offTimer = null;
 		this.restartDelay = 2000;
@@ -369,6 +372,7 @@ module.exports = NodeHelper.create({
 			this.wakeUntil = Date.now() + this.config.wakeMinutes * 60 * 1000;
 			Log.log("Voice: wake up");
 		} else if (action === "good_night") {
+			this.clearFocus();
 			this.wakeUntil = 0;
 			this.asleep = this.person;
 			Log.log("Voice: good night");
@@ -382,6 +386,30 @@ module.exports = NodeHelper.create({
 		} else if ((action === "show" || action === "hide") && this.features.some((known) => known.key === feature)) {
 			this.overrides[feature] = action === "show";
 			Log.log(`Voice: ${action} ${feature}`);
+		} else if (action === "only" && this.features.some((known) => known.key === feature)) {
+			const known = this.features.find((entry) => entry.key === feature);
+			if (!canFocus(this.features, feature, this.person)) {
+				// It belongs to someone else, or nobody is recognized.
+				Log.log(`Voice: show only ${feature}, which is not on this view`);
+				this.sendSocketNotification("SAY", { id: `focus-${Date.now()}`, text: `${known.label} is not on your view.` });
+				return;
+			}
+			if (!this.person) {
+				// With nobody recognized this also wakes the shared view.
+				this.asleep = null;
+				this.wakeUntil = Date.now() + this.config.wakeMinutes * 60 * 1000;
+			}
+			this.clearFocus();
+			this.focus = feature;
+			this.focusTimer = setTimeout(() => {
+				this.focus = null;
+				this.focusTimer = null;
+				this.refresh();
+			}, this.config.focusSeconds * 1000);
+			Log.log(`Voice: show only ${feature}`);
+		} else if (action === "show_all") {
+			this.clearFocus();
+			Log.log("Voice: show everything");
 		} else {
 			return;
 		}
@@ -431,7 +459,8 @@ module.exports = NodeHelper.create({
 			mirrorVoice: this.mirror.voice,
 			wakeUntil: this.wakeUntil,
 			asleep: this.asleep,
-			overrides: this.overrides
+			overrides: this.overrides,
+			focus: this.focus
 		}, now);
 	},
 
@@ -543,10 +572,17 @@ module.exports = NodeHelper.create({
 			// What a person asked for by voice ends when they leave.
 			this.asleep = null;
 			this.overrides = {};
+			this.clearFocus();
 		}
 		this.person = person;
 		this.unknown = Boolean(unknown);
 		this.refresh();
+	},
+
+	clearFocus () {
+		clearTimeout(this.focusTimer);
+		this.focusTimer = null;
+		this.focus = null;
 	},
 
 	cancelScreenOff () {

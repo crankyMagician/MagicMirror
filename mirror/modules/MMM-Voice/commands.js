@@ -6,7 +6,7 @@
  * @param {string} config.wakeWord the word every phrase starts with
  * @param {string[]} [config.wakeWords] several wake phrases in place of the one word: every command answers to each of them
  * @param {object} config.commands command id -> phrases without the wake word
- * @param {object} config.features spoken name -> feature key
+ * @param {object} config.features spoken name -> feature key. Each gets "show NAME", "hide NAME" and "show only NAME".
  * @returns {object[]} commands as { id, phrases }
  */
 const buildCommands = ({ wakeWord, wakeWords, commands = {}, features = {} }) => {
@@ -17,6 +17,8 @@ const buildCommands = ({ wakeWord, wakeWords, commands = {}, features = {} }) =>
 		for (const action of ["show", "hide"]) {
 			list.push({ id: `${action}:${key}`, phrases: [...withWake(`${action} ${spoken}`), ...withWake(`${action} the ${spoken}`)] });
 		}
+		// "Show only the calendar" puts that one feature alone on the screen.
+		list.push({ id: `only:${key}`, phrases: [...withWake(`show only ${spoken}`), ...withWake(`show only the ${spoken}`), ...withWake(`just the ${spoken}`)] });
 	}
 	return list;
 };

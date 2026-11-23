@@ -10,11 +10,12 @@ test("every phrase starts with the wake word", () => {
 	assert.ok(phrases.every((phrase) => phrase.startsWith("mirror ")));
 });
 
-test("each feature gets show and hide commands, with and without the", () => {
+test("each feature gets show, hide and show only commands, with and without the", () => {
 	const commands = buildCommands({ wakeWord: "mirror", commands: {}, features: { "air quality": "MMM-AirQuality" } });
 	assert.deepEqual(commands, [
 		{ id: "show:MMM-AirQuality", phrases: ["mirror show air quality", "mirror show the air quality"] },
-		{ id: "hide:MMM-AirQuality", phrases: ["mirror hide air quality", "mirror hide the air quality"] }
+		{ id: "hide:MMM-AirQuality", phrases: ["mirror hide air quality", "mirror hide the air quality"] },
+		{ id: "only:MMM-AirQuality", phrases: ["mirror show only air quality", "mirror show only the air quality", "mirror just the air quality"] }
 	]);
 });
 
@@ -33,4 +34,10 @@ test("with several wake phrases every command answers to each of them", () => {
 	assert.deepEqual(commands.find((command) => command.id === "show:newsfeed").phrases, ["mirror show news", "hey mirror show news", "mirror show the news", "hey mirror show the news"]);
 	// An empty list falls back to the one wake word.
 	assert.deepEqual(buildCommands({ wakeWord: "mirror", wakeWords: [], commands: { wake_up: ["wake up"] } })[0].phrases, ["mirror wake up"]);
+});
+
+test("no two commands share a phrase", () => {
+	const commands = buildCommands({ wakeWord: "mirror", commands: { show_all: ["go back", "show everything"] }, features: { calendar: "calendar", "work calendar": "work-calendar", weather: "weather" } });
+	const phrases = commands.flatMap((command) => command.phrases);
+	assert.equal(new Set(phrases).size, phrases.length);
 });

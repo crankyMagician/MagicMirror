@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { pack } = require("./fit");
+const { center, pack } = require("./fit");
 
 const item = (id, height, pinned = false) => ({ id, height, pinned });
 
@@ -76,4 +76,27 @@ test("an empty column and a start past the end are fine", () => {
 	assert.deepEqual(pack({ items: [], available: 500, start: 3 }), { shown: [], waiting: [], next: 0 });
 	const result = pack({ items: [item("a", 100), item("b", 100)], available: 500, start: 7 });
 	assert.deepEqual(result.shown, ["a", "b"]);
+});
+
+test("a module shown alone moves to the middle of the screen and grows", () => {
+	const screen = { width: 1080, height: 1920 };
+	// A column module near the top left.
+	const move = center({ left: 60, top: 300, width: 465, height: 250 }, screen);
+	assert.equal(move.scale, 1.8);
+	// The box's center, at 292.5 and 425, lands on the screen's, at 540 and 960.
+	assert.equal(move.x, Math.round(540 - 292.5));
+	assert.equal(move.y, 960 - 425);
+});
+
+test("a module shown alone never grows past the screen", () => {
+	const screen = { width: 1080, height: 1920 };
+	const wide = center({ left: 60, top: 1700, width: 960, height: 120 }, screen);
+	assert.ok(wide.scale * 960 <= 1080 * 0.9 + 1);
+	const tall = center({ left: 555, top: 200, width: 465, height: 1500 }, screen);
+	assert.ok(tall.scale * 1500 <= 1920 * 0.8 + 2);
+	assert.ok(tall.scale > 1);
+	// A box bigger than the screen shrinks to fit.
+	assert.ok(center({ left: 0, top: 0, width: 1200, height: 2400 }, screen).scale < 1);
+	// An empty box stays where it is.
+	assert.deepEqual(center({ left: 10, top: 10, width: 0, height: 0 }, screen), { x: 0, y: 0, scale: 1 });
 });

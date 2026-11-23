@@ -317,10 +317,11 @@ const problemWith = (input, featureKeys, blocks, voiceIds) => {
  * @param {number} [state.wakeUntil] time in ms until which a spoken "wake up" keeps the mirror on
  * @param {string|null} [state.asleep] the person who said "good night" and is still there
  * @param {object} [state.overrides] features switched by voice, by feature key
+ * @param {string|null} [state.focus] the one feature someone asked to see alone, by feature key
  * @param {Date} now the current time
  * @returns {object} who the view is for, the block of the day, the feature switches and how to speak
  */
-const viewFor = ({ person, unknown, profile, blocks, quietHours = null, mirrorVoice = "", wakeUntil = 0, asleep = null, overrides = {} }, now) => {
+const viewFor = ({ person, unknown, profile, blocks, quietHours = null, mirrorVoice = "", wakeUntil = 0, asleep = null, overrides = {}, focus = null }, now) => {
 	const block = currentBlock(blocks, now).key;
 	// Until a person with a voice of their own is seen, the mirror speaks in its own.
 	const view = { person: person || null, unknown: Boolean(unknown), quiet: false, block, features: null, theme: "dark", speech: { ...DEFAULT_SPEECH, voice: mirrorVoice } };
@@ -346,7 +347,23 @@ const viewFor = ({ person, unknown, profile, blocks, quietHours = null, mirrorVo
 	if (view.person && Object.keys(overrides).length > 0) {
 		view.features = { ...(view.features || {}), ...overrides };
 	}
+	if (view.person && focus) {
+		// "Show only X": that feature alone, whatever the switches say.
+		view.focus = focus;
+	}
 	return view;
+};
+
+/**
+ * Tells whether a feature can be shown alone to whoever is at the mirror.
+ * @param {object[]} features the mirror's features, each with a key and its owners
+ * @param {string} key the feature asked for
+ * @param {string|null} person who is at the mirror, or null for a guest
+ * @returns {boolean} true for a shared feature and for one of that person's own
+ */
+const canFocus = (features, key, person) => {
+	const feature = (Array.isArray(features) ? features : []).find((known) => known.key === key);
+	return Boolean(feature) && (feature.owners.length === 0 || (person !== null && feature.owners.includes(person)));
 };
 
 class ProfileStore {
@@ -398,4 +415,4 @@ class ProfileStore {
 	}
 }
 
-module.exports = { DEFAULT_BLOCKS, DEFAULT_SPEECH, ProfileStore, currentBlock, defaultMirror, defaultProfile, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor };
+module.exports = { DEFAULT_BLOCKS, DEFAULT_SPEECH, ProfileStore, canFocus, currentBlock, defaultMirror, defaultProfile, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor };
