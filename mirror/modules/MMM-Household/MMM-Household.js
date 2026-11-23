@@ -1,3 +1,5 @@
+/* global HouseholdFit */
+
 /* MMM-Household
  *
  * Shows each person their own set of modules, based on who the camera
@@ -29,6 +31,14 @@ Module.register("MMM-Household", {
 		camera: "/dev/video0",
 		// Milliseconds for the fade when modules appear and disappear.
 		fadeSpeed: 800,
+		// The positions that are columns of a fixed height. When a column's
+		// modules do not all fit, the ones left out wait for a turn, so
+		// nothing ever runs into something else (see fit.js).
+		columns: ["top_left", "top_right"],
+		// Feature keys of the modules that never wait for a turn.
+		pinned: ["clock", "weather", "calendar"],
+		// Seconds before a full column gives its waiting modules a turn.
+		turnSeconds: 40,
 		// Names for features on the settings page, by feature key. They add to
 		// and override the built-in names below. A feature without a name uses
 		// the module's header, then its key.
@@ -62,9 +72,16 @@ Module.register("MMM-Household", {
 		newsfeed: "News"
 	},
 
+	getScripts () {
+		return [this.file("fit.js")];
+	},
+
 	start () {
 		this.view = { person: null, features: null };
 		this.domReady = false;
+		// Per column: where the current turn starts and where the next one will.
+		this.turns = {};
+		this.waiting = false;
 		this.sendSocketNotification("CONFIG", this.config);
 	},
 
@@ -73,6 +90,7 @@ Module.register("MMM-Household", {
 			this.domReady = true;
 			this.sendSocketNotification("FEATURES", this.listFeatures());
 			this.applyView();
+			this.watchSizes();
 		} else if (notification === "VOICE_COMMAND") {
 			// From MMM-Voice: wake up, good night, and show or hide a feature.
 			this.sendSocketNotification("VOICE", payload);
@@ -81,6 +99,10 @@ Module.register("MMM-Household", {
 
 	socketNotificationReceived (notification, payload) {
 		if (notification === "VIEW") {
+			if (payload.person !== this.view.person) {
+				// Another person has other modules, so the turns start over.
+				this.turns = {};
+			}
 			this.view = payload;
 			this.applyView();
 			this.sendNotification("HOUSEHOLD_PRESENCE", payload);
@@ -158,19 +180,114 @@ Module.register("MMM-Household", {
 		return true;
 	},
 
-	applyView () {
+	/**
+	 * Packs each column and lists the modules that have to wait for a turn.
+	 * A hidden module keeps its width (see custom.css), so its height can be
+	 * measured before it is shown.
+	 * @param {boolean} advance true to give the waiting modules their turn
+	 * @returns {Set<string>} the identifiers of the modules that wait
+	 */
+	packColumns (advance) {
+		const waiting = new Set();
+		for (const position of this.config.columns) {
+			const region = document.querySelector(`.region.${position.replace("_", ".")}`);
+			if (!region || region.clientHeight === 0) {
+				continue;
+			}
+			const items = [];
+			let gap = 0;
+			MM.getModules().enumerate((module) => {
+				const wrapper = document.getElementById(module.identifier);
+				if (module.data.position !== position || !wrapper || !this.isManaged(module) || !this.isVisible(module)) {
+					return;
+				}
+				const style = getComputedStyle(wrapper);
+				const under = parseFloat(style.marginBottom) || 0;
+				gap = Math.max(gap, under);
+				items.push({
+					id: module.identifier,
+					height: wrapper.offsetHeight + under + (parseFloat(style.marginTop) || 0),
+					pinned: this.config.pinned.includes(this.featureKeyOf(module))
+				});
+			});
+			const turn = this.turns[position] || { start: 0, next: 0 };
+			if (advance) {
+				turn.start = turn.next;
+			}
+			// The gap under the last module may hang over the column's edge.
+			const result = HouseholdFit.pack({ items, available: region.clientHeight + gap, start: turn.start });
+			turn.next = result.next;
+			this.turns[position] = turn;
+			result.waiting.forEach((id) => waiting.add(id));
+		}
+		return waiting;
+	},
+
+	/**
+	 * Fits the columns again when a module or a column changes its size, and
+	 * gives waiting modules a turn every `turnSeconds`.
+	 */
+	watchSizes () {
+		let timer = null;
+		const again = () => {
+			clearTimeout(timer);
+			timer = setTimeout(() => this.applyView(), 250);
+		};
+		const observer = new ResizeObserver(again);
+		for (const position of this.config.columns) {
+			const region = document.querySelector(`.region.${position.replace("_", ".")}`);
+			if (region) {
+				observer.observe(region);
+			}
+		}
+		MM.getModules().enumerate((module) => {
+			const wrapper = document.getElementById(module.identifier);
+			if (wrapper && this.config.columns.includes(module.data.position)) {
+				observer.observe(wrapper);
+			}
+		});
+		if (this.config.turnSeconds > 0) {
+			setInterval(() => {
+				if (this.waiting) {
+					this.applyView(true);
+				}
+			}, this.config.turnSeconds * 1000);
+		}
+	},
+
+	/**
+	 * Shows and hides modules. A module can be held back for two reasons, each
+	 * with a lock of its own: the view (it is not for this person, or they
+	 * switched it off) and the fit (its column is full and it waits its turn).
+	 * @param {boolean} [advance] true to give the waiting modules their turn
+	 */
+	applyView (advance = false) {
 		if (!this.domReady) {
 			return;
 		}
-		const lockString = this.identifier;
+		const waiting = this.packColumns(advance);
+		this.waiting = waiting.size > 0;
+		const viewLock = this.identifier;
+		const fitLock = `${this.identifier}-fit`;
+		const speed = this.config.fadeSpeed;
 		MM.getModules().enumerate((module) => {
 			if (!this.isManaged(module)) {
 				return;
 			}
-			if (this.isVisible(module)) {
-				module.show(this.config.fadeSpeed, { lockString });
-			} else {
-				module.hide(this.config.fadeSpeed, { lockString });
+			const visible = this.isVisible(module);
+			const held = waiting.has(module.identifier);
+			const locks = module.lockStrings;
+			if (held && !locks.includes(fitLock)) {
+				module.hide(speed, { lockString: fitLock });
+			}
+			if (!visible && !locks.includes(viewLock)) {
+				module.hide(speed, { lockString: viewLock });
+			}
+			if (visible && locks.includes(viewLock)) {
+				module.show(speed, { lockString: viewLock });
+			}
+			if (!held && locks.includes(fitLock)) {
+				module.show(speed, { lockString: fitLock });
 			}
 		});
 

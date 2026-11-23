@@ -1,8 +1,6 @@
 /* Styles for the household mirror. setup-pi.sh links this file to
  * config/custom.css on the Pi. */
 
-/* Third-party modules that need a little help in the portrait layout. */
-
 :root[data-theme="dark"] {
   color-scheme: dark;
   --color-background: #000;
@@ -53,7 +51,6 @@
 /* Account messages and task titles stay inside the calendar column. */
 .MMM-GoogleCalendar,
 .MMM-HouseholdTasks {
-  max-width: 420px;
   overflow-wrap: anywhere;
 }
 
@@ -63,132 +60,151 @@
   white-space: normal;
 }
 
-/* Make room for the inventory without overlapping the greeting or the
- * bottom columns. These positions apply only while the panel is visible. */
-body:has(.MMM-UniFi:not(.hidden)) .region.upper.third {
-  top: 14%;
+/* The page layout. MagicMirror's own regions float over each other: the
+ * middle and the thirds lie on top of the corner columns, and a tall column
+ * runs into the one under it. Here the page is a stack that cannot overlap:
+ *
+ *   a band for what the mirror says to you   (top_bar)
+ *   two columns of modules                   (top_left, top_right)
+ *   the news                                 (bottom_bar)
+ *
+ * The columns take the height that is left and cut off what does not fit.
+ * MMM-Household measures the modules and shows only the ones that fit, in
+ * turns, so in practice nothing is cut off (see its fit.js). The config uses
+ * only these four positions. */
+:root {
+  --mirror-gap: 30px;
+  --mirror-column: calc((100vw - var(--gap-body-left) - var(--gap-body-right) - var(--mirror-gap)) / 2);
+  --mirror-band: 96px;
+  --mirror-news: 124px;
 }
 
-body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
-  font-size: 40px;
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.region.top.bar {
+  position: static;
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--mirror-column) var(--mirror-column);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: var(--mirror-gap);
+}
+
+.region.top.left,
+.region.top.right {
+  position: static;
+  grid-row: 2;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.region.top.left {
+  grid-column: 1;
+}
+
+.region.top.right {
+  grid-column: 2;
+}
+
+.region.top.center {
+  display: none;
+}
+
+/* A hidden module is taken out of the column but keeps this width, so its
+ * height can be measured before it is shown again. */
+.region.top.left .module,
+.region.top.right .module {
+  width: var(--mirror-column);
+  box-sizing: border-box;
+}
+
+.region.bottom.bar {
+  position: static;
+  flex: 0 0 auto;
+}
+
+/* The news keeps one height, so a long headline does not resize the columns. */
+.region.bottom.bar > .container {
+  height: var(--mirror-news);
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+/* The band holds one thing at a time: an answer or a special-day line
+ * first, then the greeting, then a compliment. */
+.region.top.bar > .container {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: var(--mirror-band);
+  padding-bottom: var(--mirror-gap);
+  justify-content: center;
+}
+
+.region.top.bar > .container > .module {
+  margin: 0;
+}
+
+.region.top.bar > .container:has(.MMM-Briefing .briefing-special) .MMM-Greeter,
+.region.top.bar > .container:has(.MMM-Briefing .briefing-special) .compliments,
+.region.top.bar > .container:has(.MMM-Greeter:not(.hidden) .greeter-text) .compliments {
+  display: none;
+}
+
+.region.top.bar .compliments .xlarge {
+  font-size: 38px;
+  line-height: 1.2;
   letter-spacing: 0;
 }
 
-body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-wrapper {
+/* Modules sized for a column. */
+.MMM-UniFi .unifi-mirror {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+}
+
+/* The forecast keeps its own width and sits at the column's outer edge. */
+.region.top.right .weather .weather-forecast {
+  margin-left: auto;
+}
+
+.MMM-UniFi .unifi-mirror .unifi-rows {
+  min-height: 360px;
+}
+
+.MMM-UniFi .unifi-mirror .unifi-row {
+  padding: 5px 0;
+}
+
+.MMM-MoonPhase #moonphase-wrapper {
   flex-direction: row;
   justify-content: flex-end;
   gap: 12px;
 }
 
-body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-canvas {
+.MMM-MoonPhase #moonphase-canvas {
   width: 60px;
   height: 60px;
 }
 
-@media (orientation: portrait) {
-  body:has(.MMM-UniFi:not(.hidden)) .region.middle.center {
-    top: 42%;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.top.right {
-    --gap-modules: 16px;
-  }
-
-  .MMM-UniFi .unifi-mirror .unifi-rows {
-    min-height: 360px;
-  }
-
-  .MMM-UniFi .unifi-mirror .unifi-row {
-    padding: 5px 0;
-  }
-
-  .MMM-UniFi .unifi-mirror {
-    width: min(420px, 80vw);
-    margin-left: auto;
-    margin-right: 0;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .MMM-DailyPokemon #poke-pic,
-  body:has(.MMM-UniFi:not(.hidden)) .MMM-DailyPokemon #poke-pic-grayscale {
-    width: 120px;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
-    max-width: 220px;
-    margin-inline: auto;
-    font-size: 30px;
-    line-height: 1.15;
-  }
+/* A frame keeps one height whatever the shape of the picture, so the column
+ * does not shift each time the picture changes. */
+.MMM-ImagesPhotos .module-content {
+  display: flex;
+  height: 300px;
+  align-items: center;
+  justify-content: flex-end;
 }
 
-/* Leave a readable central area in the landscape bench layout. */
-@media (orientation: landscape) {
-  body:has(.MMM-UniFi:not(.hidden)) .region.top.left,
-  body:has(.MMM-UniFi:not(.hidden)) .region.top.right,
-  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.left,
-  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.right {
-    --gap-modules: 16px;
-    transform: scale(0.85);
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.top.left {
-    transform-origin: top left;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.top.right {
-    transform-origin: top right;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.left {
-    transform-origin: bottom left;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.bottom.right {
-    transform-origin: bottom right;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
-    font-size: 30px;
-  }
-
-  body:has(.MMM-UniFi:not(.hidden)) .region.upper.third {
-    top: 10%;
-  }
-
-  body .MMM-Greeter .greeter-sprite {
-    width: 96px;
-    height: 96px;
-  }
-
-  body .MMM-DailyPokemon #poke-pic,
-  body .MMM-DailyPokemon #poke-pic-grayscale {
-    width: 100px;
-  }
-
-  body .MMM-DailyPokemon #poke-pic-type,
-  body .MMM-DailyPokemon #poke-pic-grayscale-type {
-    width: 32px;
-  }
-
-  body .MMM-APOD img {
-    height: 220px;
-    width: auto;
-    object-fit: contain;
-  }
-
-  body .MMM-WordOfTheDay .wotd-summary {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    overflow: hidden;
-  }
+.MMM-ImagesPhotos.feature-art .module-content {
+  height: 380px;
 }
 
 /* Word of the day ships without styles of its own. */
-.MMM-WordOfTheDay {
-  max-width: 420px;
-}
-
 .MMM-WordOfTheDay .wotd-title {
   color: var(--color-text-bright);
   font-size: var(--font-size-medium);
@@ -200,6 +216,10 @@ body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-canvas {
   display: block;
   font-size: var(--font-size-xsmall);
   line-height: 1.35;
+}
+
+.MMM-WordOfTheDay .wotd-summary {
+  width: auto;
 }
 
 .MMM-WordOfTheDay .wotd-examples {
@@ -220,9 +240,11 @@ body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-canvas {
   align-items: baseline;
 }
 
-/* Pokémon of the day: the module's offsets assume its stats table is on. */
+/* Pokémon of the day: the module's offsets assume its stats table is on.
+ * It sits at the left edge of the left column, under Pokémon GO. */
 .MMM-DailyPokemon #poke-wrapper {
-  margin-right: 0;
+  margin-left: 0;
+  margin-right: auto;
 }
 
 .MMM-DailyPokemon #flex-wrapper div {
@@ -236,7 +258,7 @@ body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-canvas {
 .MMM-DailyPokemon #poke-pic,
 .MMM-DailyPokemon #poke-pic-grayscale {
   bottom: 0;
-  width: 150px;
+  width: 120px;
 }
 
 .MMM-DailyPokemon #poke-pic-type,
