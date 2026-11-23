@@ -161,7 +161,7 @@
 		$("photos-state").textContent = count === 0
 			? "Your slideshow has no photos yet. Choose some from your Google Photos and the mirror keeps a copy."
 			: `Your slideshow has ${count} photo${count === 1 ? "" : "s"}. Choose more at any time.`;
-		$("photos-pick").disabled = photos.picking;
+		$("photos-pick").textContent = photos.picking ? "Open the Google Photos page again" : "Choose photos from Google Photos";
 		$("photos-clear").hidden = count === 0;
 		$("photos-note").textContent = photos.note || "";
 	};

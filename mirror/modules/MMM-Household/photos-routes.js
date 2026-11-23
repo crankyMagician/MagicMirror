@@ -67,6 +67,9 @@ const countPhotos = (directory) => {
  */
 const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhotos = 300, guards, log }) => {
 	const state = new Map();
+	// The number of the newest photo choice per person. An older choice that
+	// was abandoned stops quietly when a newer one starts.
+	const newest = new Map();
 	const stateOf = (person) => state.get(person) || { picking: false, note: "" };
 	const folderOf = (person) => path.join(photosDir, person);
 	const tokenFor = (person) => accessToken(path.join(googleDir, `${accountFor(person)}.json`), path.join(googleDir, "credentials.json"), SCOPE);
@@ -108,7 +111,8 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 	};
 
 	/** Waits for the person to finish picking, then downloads what they chose. */
-	const watch = async (person, session) => {
+	const watch = async (person, session, number) => {
+		const superseded = () => newest.get(person) !== number;
 		const wait = durationMs(session.pollingConfig && session.pollingConfig.pollInterval, 5000);
 		const deadline = Date.now() + MAX_WAIT;
 		try {
@@ -118,9 +122,13 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 					throw new Error("nobody finished choosing photos in time");
 				}
 				await new Promise((resolve) => { setTimeout(resolve, wait); });
+				if (superseded()) {
+					return;
+				}
 				current = await call(await tokenFor(person), "GET", `/sessions/${encodeURIComponent(session.id)}`);
 			}
 			const token = await tokenFor(person);
+			state.set(person, { picking: true, note: "Copying your photos to the mirror." });
 			const photos = [];
 			let page = "";
 			do {
@@ -131,8 +139,13 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 			const added = await download(person, token, photos);
 			await call(token, "DELETE", `/sessions/${encodeURIComponent(session.id)}`).catch(() => {});
 			log.log(`Added ${added} photos for ${person}`);
-			state.set(person, { picking: false, note: added === 1 ? "Added 1 photo." : `Added ${added} photos.` });
+			if (!superseded()) {
+				state.set(person, { picking: false, note: added === 1 ? "Added 1 photo." : `Added ${added} photos.` });
+			}
 		} catch (error) {
+			if (superseded()) {
+				return;
+			}
 			log.warn(`Choosing photos for ${person} did not finish: ${error.message}`);
 			state.set(person, { picking: false, note: error instanceof SignInNeeded ? "This account has to sign in again with photo access." : "Choosing photos did not finish. Try again." });
 		}
@@ -152,14 +165,13 @@ const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhot
 
 	app.post("/api/photos/:person/pick", known, ...guards, async (req, res) => {
 		const person = req.params.person;
-		if (stateOf(person).picking) {
-			res.status(409).json({ error: "A photo choice is already open for this person" });
-			return;
-		}
 		try {
+			// A new choice replaces one that was opened and never finished.
 			const session = await call(await tokenFor(person), "POST", "/sessions");
+			const number = (newest.get(person) || 0) + 1;
+			newest.set(person, number);
 			state.set(person, { picking: true, note: "Waiting for you to choose photos on the Google page." });
-			watch(person, session);
+			watch(person, session, number);
 			// "/autoclose" makes Google close its page once the choice is made.
 			res.json({ pickerUri: `${session.pickerUri}/autoclose` });
 		} catch (error) {
