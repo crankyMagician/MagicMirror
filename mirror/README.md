@@ -176,11 +176,15 @@ Each person sets their own preferences from a phone on the home network:
 
 If the name does not resolve, use the Pi's address in its place.
 
-- **What I see** has a switch for every feature in each part of the day (morning from 5 am, day from 11 am, evening from 5 pm, night from 10 pm).
-- **Quiet hours** keep the screen off for that person between two times, even when the mirror sees them.
+- **What I see** has a switch for every feature in each part of the day.
 - **My face** starts an enrollment at the mirror.
 
-Changes save as they are made and apply on the mirror within a second. They are stored in `~/mirror-data/profiles.json` on the Pi.
+The **Mirror** tab beside the names holds what belongs to the mirror and the room it hangs in, and applies to everyone:
+
+- **Quiet hours** keep the screen off between two times, whoever the mirror sees, and it greets nobody. "Mirror, wake up" and any other spoken command still work.
+- **Parts of the day** sets when morning, day, evening and night start (5 am, 11 am, 5 pm and 10 pm at first). Each part has to start after the one before it.
+
+Changes save as they are made and apply on the mirror within a second. They are stored in `~/mirror-data/profiles.json` on the Pi, people under `people` and the mirror's own settings under `mirror`. A file from before the Mirror tab existed is read as it is: quiet hours that a person had switched on become the mirror's.
 
 The page has no login. `settingsAllow` in the module's config limits it to the home subnets, and anyone on those can change these preferences.
 

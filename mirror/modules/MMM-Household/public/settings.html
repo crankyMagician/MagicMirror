@@ -16,6 +16,7 @@
 
       <nav id="people" class="people" aria-label="Whose settings"></nav>
 
+      <div id="person-view">
       <section aria-labelledby="appearance-title">
         <h2 id="appearance-title">Appearance</h2>
         <p class="hint">The whole mirror uses your theme when it recognizes you.</p>
@@ -42,19 +43,6 @@
         </div>
       </section>
 
-      <section aria-labelledby="quiet-title">
-        <h2 id="quiet-title">Quiet hours</h2>
-        <p class="hint">During quiet hours the screen stays off when the mirror sees you.</p>
-        <label class="row">
-          <span>Use quiet hours</span>
-          <input id="quiet-enabled" type="checkbox" />
-        </label>
-        <div class="row times">
-          <label>From <input id="quiet-from" type="time" /></label>
-          <label>To <input id="quiet-to" type="time" /></label>
-        </div>
-      </section>
-
       <section aria-labelledby="face-title">
         <h2 id="face-title">My face</h2>
         <p id="face-state" class="hint"></p>
@@ -74,6 +62,31 @@
         <button id="photos-clear" type="button">Remove all my photos</button>
         <p id="photos-note" class="hint" role="status"></p>
       </section>
+
+      </div>
+
+      <div id="mirror-view" hidden>
+      <p class="hint">These settings belong to the mirror and apply to everyone.</p>
+
+      <section aria-labelledby="quiet-title">
+        <h2 id="quiet-title">Quiet hours</h2>
+        <p class="hint">During quiet hours the screen stays off and the mirror greets nobody, whoever it sees. Say "mirror, wake up" to use it anyway.</p>
+        <label class="row">
+          <span>Use quiet hours</span>
+          <input id="quiet-enabled" type="checkbox" />
+        </label>
+        <div class="row times">
+          <label>From <input id="quiet-from" type="time" /></label>
+          <label>To <input id="quiet-to" type="time" /></label>
+        </div>
+      </section>
+
+      <section aria-labelledby="parts-title">
+        <h2 id="parts-title">Parts of the day</h2>
+        <p class="hint">When each part of the day starts. Each person chooses what they see in each part.</p>
+        <div id="parts"></div>
+      </section>
+      </div>
 
       <p id="saved" class="saved" role="status"></p>
     </main>

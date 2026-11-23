@@ -1,5 +1,9 @@
-/* Per-person preferences for the mirror: which features show in each part of
- * the day, and optional quiet hours when the screen stays off for that person.
+/* Preferences for the mirror.
+ *
+ * Each person chooses a theme and which features show in each part of the
+ * day. The mirror itself has the settings that belong to the place it hangs
+ * in: quiet hours, when the screen stays off for everyone, and the times the
+ * parts of the day start.
  *
  * The functions here are pure, apart from ProfileStore, which reads and
  * writes one JSON file.
@@ -62,9 +66,89 @@ const inRange = (from, to, date) => {
 
 const defaultProfile = (featureKeys, blocks) => ({
 	theme: "dark",
-	blocks: Object.fromEntries(blocks.map((block) => [block.key, Object.fromEntries(featureKeys.map((key) => [key, true]))])),
-	quietHours: { enabled: false, from: "23:00", to: "06:00" }
+	blocks: Object.fromEntries(blocks.map((block) => [block.key, Object.fromEntries(featureKeys.map((key) => [key, true]))]))
 });
+
+const defaultMirror = () => ({
+	quietHours: { enabled: false, from: "23:00", to: "06:00" },
+	blocks: DEFAULT_BLOCKS.map((block) => ({ ...block }))
+});
+
+const readQuietHours = (quiet, fallback) => {
+	const result = { ...fallback };
+	if (quiet && typeof quiet === "object") {
+		if (typeof quiet.enabled === "boolean") {
+			result.enabled = quiet.enabled;
+		}
+		for (const end of ["from", "to"]) {
+			if (typeof quiet[end] === "string" && TIME_PATTERN.test(quiet[end])) {
+				result[end] = quiet[end];
+			}
+		}
+	}
+	return result;
+};
+
+const inOrder = (blocks) => blocks.every((block, index) => index === 0 || toMinutes(blocks[index - 1].from) < toMinutes(block.from));
+
+/**
+ * Builds the mirror's settings from whatever was stored or submitted. The
+ * parts of the day keep their names and order. Only their start times can
+ * change, and a set of times that is out of order is dropped as a whole.
+ * @param {object} input stored or submitted mirror settings, possibly partial
+ * @returns {object} complete mirror settings
+ */
+const normalizeMirror = (input) => {
+	const mirror = defaultMirror();
+	const source = input && typeof input === "object" ? input : {};
+	mirror.quietHours = readQuietHours(source.quietHours, mirror.quietHours);
+	if (Array.isArray(source.blocks)) {
+		const blocks = mirror.blocks.map((block) => {
+			const stored = source.blocks.find((entry) => entry && entry.key === block.key);
+			return stored && typeof stored.from === "string" && TIME_PATTERN.test(stored.from) ? { ...block, from: stored.from } : block;
+		});
+		if (inOrder(blocks)) {
+			mirror.blocks = blocks;
+		}
+	}
+	return mirror;
+};
+
+/**
+ * Checks submitted mirror settings strictly.
+ * @param {object} input the submitted settings
+ * @returns {string|null} a message describing the first problem, or null
+ */
+const problemWithMirror = (input) => {
+	if (!input || typeof input !== "object" || Array.isArray(input)) {
+		return "The mirror settings must be an object";
+	}
+	const quiet = input.quietHours;
+	if (!quiet || typeof quiet !== "object" || typeof quiet.enabled !== "boolean") {
+		return "quietHours needs enabled set to true or false";
+	}
+	for (const end of ["from", "to"]) {
+		if (typeof quiet[end] !== "string" || !TIME_PATTERN.test(quiet[end])) {
+			return `quietHours.${end} must be a time such as 23:00`;
+		}
+	}
+	if (!Array.isArray(input.blocks) || input.blocks.length !== DEFAULT_BLOCKS.length) {
+		return `blocks must list the ${DEFAULT_BLOCKS.length} parts of the day`;
+	}
+	for (const [index, block] of DEFAULT_BLOCKS.entries()) {
+		const given = input.blocks[index];
+		if (!given || given.key !== block.key) {
+			return `The parts of the day are ${DEFAULT_BLOCKS.map((entry) => entry.key).join(", ")}, in that order`;
+		}
+		if (typeof given.from !== "string" || !TIME_PATTERN.test(given.from)) {
+			return `${block.label} needs a start time such as ${block.from}`;
+		}
+	}
+	if (!inOrder(input.blocks)) {
+		return "Each part of the day has to start after the one before it";
+	}
+	return null;
+};
 
 /**
  * Builds a complete profile from whatever was stored or submitted. Unknown
@@ -90,23 +174,13 @@ const normalize = (input, featureKeys, blocks) => {
 			}
 		}
 	}
-	const quiet = source.quietHours;
-	if (quiet && typeof quiet === "object") {
-		if (typeof quiet.enabled === "boolean") {
-			profile.quietHours.enabled = quiet.enabled;
-		}
-		for (const end of ["from", "to"]) {
-			if (typeof quiet[end] === "string" && TIME_PATTERN.test(quiet[end])) {
-				profile.quietHours[end] = quiet[end];
-			}
-		}
-	}
 	return profile;
 };
 
 /**
  * Checks a submitted profile strictly, so a bad request is refused instead of
- * being quietly repaired.
+ * being quietly repaired. Quiet hours used to be part of a profile. A page
+ * that still sends them is not refused, and the field is ignored.
  * @param {object} input the submitted profile
  * @param {string[]} featureKeys the features this person can toggle
  * @param {object[]} blocks the day's blocks
@@ -139,17 +213,6 @@ const problemWith = (input, featureKeys, blocks) => {
 			}
 		}
 	}
-	const quiet = input.quietHours;
-	if (quiet !== undefined) {
-		if (!quiet || typeof quiet !== "object" || typeof quiet.enabled !== "boolean") {
-			return "quietHours needs enabled set to true or false";
-		}
-		for (const end of ["from", "to"]) {
-			if (typeof quiet[end] !== "string" || !TIME_PATTERN.test(quiet[end])) {
-				return `quietHours.${end} must be a time such as 23:00`;
-			}
-		}
-	}
 	return null;
 };
 
@@ -160,13 +223,14 @@ const problemWith = (input, featureKeys, blocks) => {
  * @param {boolean} state.unknown true when a face is present that matches nobody
  * @param {object|null} state.profile that person's profile, or null for a guest or nobody
  * @param {object[]} state.blocks the day's blocks
+ * @param {object} [state.quietHours] the mirror's quiet hours: enabled, from and to
  * @param {number} [state.wakeUntil] time in ms until which a spoken "wake up" keeps the mirror on
  * @param {string|null} [state.asleep] the person who said "good night" and is still there
  * @param {object} [state.overrides] features switched by voice, by feature key
  * @param {Date} now the current time
  * @returns {object} who the view is for, the block of the day and the feature switches
  */
-const viewFor = ({ person, unknown, profile, blocks, wakeUntil = 0, asleep = null, overrides = {} }, now) => {
+const viewFor = ({ person, unknown, profile, blocks, quietHours = null, wakeUntil = 0, asleep = null, overrides = {} }, now) => {
 	const block = currentBlock(blocks, now).key;
 	const view = { person: person || null, unknown: Boolean(unknown), quiet: false, block, features: null, theme: "dark" };
 	const woken = wakeUntil > now.getTime();
@@ -179,12 +243,11 @@ const viewFor = ({ person, unknown, profile, blocks, wakeUntil = 0, asleep = nul
 		// "Wake up" with nobody recognized shows the shared view for a while.
 		view.person = "guest";
 	}
+	if (view.person && quietHours && quietHours.enabled && !woken && inRange(quietHours.from, quietHours.to, now)) {
+		// In quiet hours the mirror treats everyone as absent, guests included.
+		return { ...view, person: null, quiet: true };
+	}
 	if (view.person && profile) {
-		const quiet = profile.quietHours;
-		if (quiet.enabled && !woken && inRange(quiet.from, quiet.to, now)) {
-			// In quiet hours the mirror treats the person as absent.
-			return { ...view, person: null, quiet: true };
-		}
 		view.features = { ...profile.blocks[block] };
 		view.theme = profile.theme === "light" ? "light" : "dark";
 	}
@@ -197,11 +260,18 @@ const viewFor = ({ person, unknown, profile, blocks, wakeUntil = 0, asleep = nul
 class ProfileStore {
 	constructor (file) {
 		this.file = file;
-		this.data = { version: 1, people: {} };
+		this.data = { version: 2, mirror: defaultMirror(), people: {} };
 		try {
 			const stored = JSON.parse(fs.readFileSync(file, "utf8"));
 			if (stored && typeof stored.people === "object") {
-				this.data = { version: 1, people: stored.people };
+				this.data.people = stored.people;
+				this.data.mirror = normalizeMirror(stored.mirror);
+				if (!stored.mirror) {
+					// Version 1 kept quiet hours with each person. The mirror takes
+					// over the first set that was switched on.
+					const quiet = Object.values(stored.people).map((person) => person && person.quietHours).find((hours) => hours && hours.enabled === true);
+					this.data.mirror.quietHours = readQuietHours(quiet, this.data.mirror.quietHours);
+				}
 			}
 		} catch (error) {
 			if (error.code !== "ENOENT") {
@@ -216,6 +286,19 @@ class ProfileStore {
 
 	set (name, profile) {
 		this.data.people[name] = profile;
+		this.save();
+	}
+
+	getMirror () {
+		return structuredClone(this.data.mirror);
+	}
+
+	setMirror (mirror) {
+		this.data.mirror = normalizeMirror(mirror);
+		this.save();
+	}
+
+	save () {
 		fs.mkdirSync(path.dirname(this.file), { recursive: true });
 		const temporary = `${this.file}.tmp`;
 		fs.writeFileSync(temporary, `${JSON.stringify(this.data, null, "\t")}\n`, { mode: 0o600 });
@@ -223,4 +306,4 @@ class ProfileStore {
 	}
 }
 
-module.exports = { DEFAULT_BLOCKS, ProfileStore, currentBlock, defaultProfile, inRange, normalize, problemWith, viewFor };
+module.exports = { DEFAULT_BLOCKS, ProfileStore, currentBlock, defaultMirror, defaultProfile, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor };
