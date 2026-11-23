@@ -11,7 +11,8 @@
 // the paths can come from the environment. Strings are joined with + here,
 // because MagicMirror replaces dollar-brace names from the environment in
 // this file's text before it runs.
-const googleDir = (process.env.MIRROR_DATA_DIR || process.env.HOME + "/mirror-data") + "/google";
+const dataDir = process.env.MIRROR_DATA_DIR || process.env.HOME + "/mirror-data";
+const googleDir = dataDir + "/google";
 const googleAccount = (name) => ({
 	tokenFile: googleDir + "/" + name + ".json",
 	credentialsFile: googleDir + "/credentials.json"
@@ -35,6 +36,20 @@ const googleTasks = (person, account, header, feature) => ({
 	config: {
 		...googleAccount(account),
 		maxTasks: 4
+	}
+});
+// A framed photo from the person's own folder, filled from Google Photos on
+// the settings page. It changes every 20 seconds.
+const photoFrame = (person) => ({
+	module: "MMM-ImagesPhotos",
+	classes: person + " feature-photos",
+	position: "lower_third",
+	config: {
+		path: dataDir + "/photos/" + person,
+		updateInterval: 20 * 1000,
+		maxWidth: "380px",
+		maxHeight: "380px",
+		opacity: 1
 	}
 });
 
@@ -73,6 +88,7 @@ const config = {
 					"work-calendar": "Work calendar",
 					tasks: "Tasks",
 					"work-tasks": "Work tasks",
+					photos: "Photos",
 					unifi: "Network devices",
 					"MMM-MoonPhase": "Moon",
 					"MMM-APOD": "Space picture",
@@ -98,6 +114,7 @@ const config = {
 					"work calendar": "work-calendar",
 					tasks: "tasks",
 					"work tasks": "work-tasks",
+					photos: "photos",
 					weather: "weather",
 					forecast: "forecast",
 					news: "newsfeed",
@@ -127,6 +144,8 @@ const config = {
 		googleTasks("sam", "sam-merrows", "Merrows tasks", "work-tasks"),
 		googleTasks("heather", "heather-personal", "Tasks", "tasks"),
 		googleTasks("heather", "heather-merrows", "Merrows tasks", "work-tasks"),
+		photoFrame("sam"),
+		photoFrame("heather"),
 		{
 			module: "weather",
 			position: "top_right",

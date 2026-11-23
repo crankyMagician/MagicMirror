@@ -1,5 +1,5 @@
-/* Pure helpers for MMM-HouseholdTasks: ordering tasks and judging whether a
- * stored Google token still works. Due-date naming lives in due.js. */
+/* Pure helpers for MMM-HouseholdTasks: ordering tasks. Due-date naming lives
+ * in due.js and token handling in mirror/lib/google-token.js. */
 
 const { dueLabel, localDay } = require("./due");
 
@@ -30,12 +30,4 @@ const pickTasks = (lists, limit) => {
 	return all.slice(0, limit).map(({ title, due, list }) => ({ title, due, list }));
 };
 
-/**
- * Tells whether a stored token needs refreshing before use.
- * @param {object} token the stored token
- * @param {number} now the current time in ms
- * @returns {boolean} true when there is no access token or it expires within a minute
- */
-const needsRefresh = (token, now) => !token.access_token || !token.expiry_date || token.expiry_date - now < 60 * 1000;
-
-module.exports = { dueLabel, localDay, needsRefresh, pickTasks };
+module.exports = { dueLabel, localDay, pickTasks };

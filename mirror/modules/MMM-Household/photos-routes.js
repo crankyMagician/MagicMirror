@@ -1,0 +1,194 @@
+/* Lets each person fill a slideshow folder from Google Photos.
+ *
+ * Google no longer lets an app read a person's albums. What it offers is a
+ * picker: the app opens a session, the person chooses photos on a Google
+ * page, and the app may then download exactly those. This file runs that
+ * flow for the settings page and stores the photos on the Pi, in
+ * ~/mirror-data/photos/<person>/, where a slideshow module shows them.
+ */
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+const { SignInNeeded, accessToken } = require("../../lib/google-token");
+
+const PICKER = "https://photospicker.googleapis.com/v1";
+const SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
+const TIMEOUT = 30000;
+const MAX_WAIT = 20 * 60 * 1000;
+
+/**
+ * Reads a Google duration such as "5s" or "1.5s" as milliseconds.
+ * @param {string} value the duration
+ * @param {number} fallback milliseconds to use when it cannot be read
+ * @returns {number} milliseconds, between one second and one minute
+ */
+const durationMs = (value, fallback) => {
+	const seconds = Number.parseFloat(String(value || ""));
+	const ms = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : fallback;
+	return Math.min(60000, Math.max(1000, ms));
+};
+
+/**
+ * Names the file a picked photo is stored as. The same photo always gets the
+ * same name, so picking it twice does not store it twice.
+ * @param {string} id the media item's id
+ * @returns {string} a file name
+ */
+const fileNameFor = (id) => `${crypto.createHash("sha256").update(String(id)).digest("hex").slice(0, 24)}.jpg`;
+
+/**
+ * Keeps the picked items that are photos with a download address.
+ * @param {object[]} items media items from the Picker API
+ * @returns {object[]} items as { id, baseUrl }
+ */
+const photosIn = (items) => (items || [])
+	.filter((item) => item && item.type === "PHOTO" && item.mediaFile && item.mediaFile.baseUrl)
+	.map((item) => ({ id: item.id, baseUrl: item.mediaFile.baseUrl }));
+
+const countPhotos = (directory) => {
+	try {
+		return fs.readdirSync(directory).filter((name) => name.endsWith(".jpg")).length;
+	} catch {
+		return 0;
+	}
+};
+
+/**
+ * Adds the photo routes to the settings server.
+ * @param {object} app the settings Express app, after its access middleware
+ * @param {object} options where things are and who may pick
+ * @param {function(): string[]} options.people returns the names on this mirror
+ * @param {function(string): string} options.accountFor maps a person to their Google account name
+ * @param {string} options.googleDir the folder with the token files and the OAuth client file
+ * @param {string} options.photosDir the folder that holds one photo folder per person
+ * @param {number} options.maxPhotos the most photos kept per person
+ * @param {object[]} options.guards the JSON-only middleware for requests that change something
+ * @param {object} options.log a logger with log and warn
+ */
+const addPhotoRoutes = (app, { people, accountFor, googleDir, photosDir, maxPhotos = 300, guards, log }) => {
+	const state = new Map();
+	const stateOf = (person) => state.get(person) || { picking: false, note: "" };
+	const folderOf = (person) => path.join(photosDir, person);
+	const tokenFor = (person) => accessToken(path.join(googleDir, `${accountFor(person)}.json`), path.join(googleDir, "credentials.json"), SCOPE);
+
+	const call = async (token, method, route) => {
+		const response = await fetch(`${PICKER}${route}`, { method, headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT) });
+		if (response.status === 401 || response.status === 403) {
+			throw new SignInNeeded("Google refused photo access for this sign-in");
+		}
+		if (!response.ok) {
+			throw new Error(`Google Photos answered ${response.status}`);
+		}
+		return method === "DELETE" ? {} : response.json();
+	};
+
+	const download = async (person, token, photos) => {
+		const folder = folderOf(person);
+		fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
+		let added = 0;
+		for (const photo of photos) {
+			if (countPhotos(folder) >= maxPhotos) {
+				break;
+			}
+			const file = path.join(folder, fileNameFor(photo.id));
+			if (fs.existsSync(file)) {
+				continue;
+			}
+			// "=w1600-h1600" asks Google for a copy that fits in 1600 by 1600 pixels.
+			const response = await fetch(`${photo.baseUrl}=w1600-h1600`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT) });
+			if (!response.ok) {
+				log.warn(`A photo for ${person} could not be downloaded: ${response.status}`);
+				continue;
+			}
+			fs.writeFileSync(`${file}.tmp`, Buffer.from(await response.arrayBuffer()), { mode: 0o600 });
+			fs.renameSync(`${file}.tmp`, file);
+			added += 1;
+		}
+		return added;
+	};
+
+	/** Waits for the person to finish picking, then downloads what they chose. */
+	const watch = async (person, session) => {
+		const wait = durationMs(session.pollingConfig && session.pollingConfig.pollInterval, 5000);
+		const deadline = Date.now() + MAX_WAIT;
+		try {
+			let current = session;
+			while (!current.mediaItemsSet) {
+				if (Date.now() > deadline) {
+					throw new Error("nobody finished choosing photos in time");
+				}
+				await new Promise((resolve) => { setTimeout(resolve, wait); });
+				current = await call(await tokenFor(person), "GET", `/sessions/${encodeURIComponent(session.id)}`);
+			}
+			const token = await tokenFor(person);
+			const photos = [];
+			let page = "";
+			do {
+				const list = await call(token, "GET", `/mediaItems?sessionId=${encodeURIComponent(session.id)}&pageSize=100${page ? `&pageToken=${encodeURIComponent(page)}` : ""}`);
+				photos.push(...photosIn(list.mediaItems));
+				page = list.nextPageToken || "";
+			} while (page);
+			const added = await download(person, token, photos);
+			await call(token, "DELETE", `/sessions/${encodeURIComponent(session.id)}`).catch(() => {});
+			log.log(`Added ${added} photos for ${person}`);
+			state.set(person, { picking: false, note: added === 1 ? "Added 1 photo." : `Added ${added} photos.` });
+		} catch (error) {
+			log.warn(`Choosing photos for ${person} did not finish: ${error.message}`);
+			state.set(person, { picking: false, note: error instanceof SignInNeeded ? "This account has to sign in again with photo access." : "Choosing photos did not finish. Try again." });
+		}
+	};
+
+	const known = (req, res, next) => {
+		if (!people().includes(req.params.person)) {
+			res.status(404).json({ error: "Nobody on this mirror has that name" });
+			return;
+		}
+		next();
+	};
+
+	app.get("/api/photos/:person", known, (req, res) => {
+		res.json({ count: countPhotos(folderOf(req.params.person)), ...stateOf(req.params.person) });
+	});
+
+	app.post("/api/photos/:person/pick", known, ...guards, async (req, res) => {
+		const person = req.params.person;
+		if (stateOf(person).picking) {
+			res.status(409).json({ error: "A photo choice is already open for this person" });
+			return;
+		}
+		try {
+			const session = await call(await tokenFor(person), "POST", "/sessions");
+			state.set(person, { picking: true, note: "Waiting for you to choose photos on the Google page." });
+			watch(person, session);
+			// "/autoclose" makes Google close its page once the choice is made.
+			res.json({ pickerUri: `${session.pickerUri}/autoclose` });
+		} catch (error) {
+			if (error instanceof SignInNeeded) {
+				res.status(403).json({ error: "This Google account has not allowed photo access yet. Sign it in again with photo access." });
+				return;
+			}
+			log.warn(`Could not open a photo choice for ${person}: ${error.message}`);
+			res.status(502).json({ error: "Google Photos is not answering" });
+		}
+	});
+
+	app.post("/api/photos/:person/clear", known, ...guards, (req, res) => {
+		const folder = folderOf(req.params.person);
+		let removed = 0;
+		try {
+			for (const name of fs.readdirSync(folder)) {
+				if (name.endsWith(".jpg")) {
+					fs.rmSync(path.join(folder, name), { force: true });
+					removed += 1;
+				}
+			}
+		} catch {
+			// No folder yet means there is nothing to remove.
+		}
+		log.log(`Removed ${removed} photos for ${req.params.person}`);
+		state.set(req.params.person, { picking: stateOf(req.params.person).picking, note: "" });
+		res.json({ count: 0 });
+	});
+};
+
+module.exports = { addPhotoRoutes, durationMs, fileNameFor, photosIn };

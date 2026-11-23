@@ -11,6 +11,7 @@ MMM-CountEvents         https://github.com/MMRIZE/MMM-CountEvents         5102b7
 MMM-CustomElementTime   https://github.com/MMRIZE/MMM-CustomElementTime   91212985f490e7948cffe82f5693fb61cc6b681d  none
 MMM-WordOfTheDay        https://github.com/jmwyds/MMM-WordOfTheDay        aff576251b4b25951c5edd988d8fda875bb8c709  npm
 MMM-History             https://github.com/cowboysdude/MMM-History        8a25a9c6aacd1b7bb83fae6f1481741dfd07c829  none
+MMM-ImagesPhotos        https://github.com/sdetweil/MMM-ImagesPhotos      7f532c758b6b7e4a9781d5682532c504a2dc7d94  npm
 
 # Our forks, on their mirror-fixes branches.
 # MMM-PokemonGOEvents: built-in fetch in place of the request package, and it keeps polling after an error.
