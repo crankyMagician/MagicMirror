@@ -61,6 +61,7 @@ const inRange = (from, to, date) => {
 };
 
 const defaultProfile = (featureKeys, blocks) => ({
+	theme: "dark",
 	blocks: Object.fromEntries(blocks.map((block) => [block.key, Object.fromEntries(featureKeys.map((key) => [key, true]))])),
 	quietHours: { enabled: false, from: "23:00", to: "06:00" }
 });
@@ -76,6 +77,9 @@ const defaultProfile = (featureKeys, blocks) => ({
 const normalize = (input, featureKeys, blocks) => {
 	const profile = defaultProfile(featureKeys, blocks);
 	const source = input && typeof input === "object" ? input : {};
+	if (source.theme === "light" || source.theme === "dark") {
+		profile.theme = source.theme;
+	}
 	for (const block of blocks) {
 		const stored = source.blocks && source.blocks[block.key];
 		if (stored && typeof stored === "object") {
@@ -113,6 +117,9 @@ const problemWith = (input, featureKeys, blocks) => {
 		return "The profile must be an object";
 	}
 	const blockKeys = blocks.map((block) => block.key);
+	if (input.theme !== undefined && !["dark", "light"].includes(input.theme)) {
+		return "theme must be dark or light";
+	}
 	if (!input.blocks || typeof input.blocks !== "object") {
 		return "The profile needs blocks";
 	}
@@ -161,7 +168,7 @@ const problemWith = (input, featureKeys, blocks) => {
  */
 const viewFor = ({ person, unknown, profile, blocks, wakeUntil = 0, asleep = null, overrides = {} }, now) => {
 	const block = currentBlock(blocks, now).key;
-	const view = { person: person || null, unknown: Boolean(unknown), quiet: false, block, features: null };
+	const view = { person: person || null, unknown: Boolean(unknown), quiet: false, block, features: null, theme: "dark" };
 	const woken = wakeUntil > now.getTime();
 
 	if (view.person && asleep === view.person) {
@@ -179,6 +186,7 @@ const viewFor = ({ person, unknown, profile, blocks, wakeUntil = 0, asleep = nul
 			return { ...view, person: null, quiet: true };
 		}
 		view.features = { ...profile.blocks[block] };
+		view.theme = profile.theme === "light" ? "light" : "dark";
 	}
 	if (view.person && Object.keys(overrides).length > 0) {
 		view.features = { ...(view.features || {}), ...overrides };
@@ -197,7 +205,7 @@ class ProfileStore {
 			}
 		} catch (error) {
 			if (error.code !== "ENOENT") {
-				throw new Error(`Cannot read ${file}: ${error.message}`);
+				throw new Error(`Cannot read ${file}: ${error.message}`, { cause: error });
 			}
 		}
 	}

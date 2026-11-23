@@ -6,7 +6,8 @@
 
 	let data = null;
 	let person = null;
-	let saveTimer = null;
+	const saveTimers = new Map();
+	const revisions = new Map();
 
 	const $ = (id) => document.getElementById(id);
 	const capitalize = (name) => name.charAt(0).toUpperCase() + name.slice(1);
@@ -67,18 +68,22 @@
 	};
 
 	const save = () => {
-		clearTimeout(saveTimer);
 		const name = person;
-		const profile = data.profiles[name];
-		saveTimer = setTimeout(async () => {
+		clearTimeout(saveTimers.get(name));
+		const profile = structuredClone(data.profiles[name]);
+		const revision = (revisions.get(name) || 0) + 1;
+		revisions.set(name, revision);
+		saveTimers.set(name, setTimeout(async () => {
 			try {
 				const saved = await send("PUT", `/profiles/${encodeURIComponent(name)}`, profile);
-				data.profiles[name] = saved.profile;
+				if (revisions.get(name) === revision) {
+					data.profiles[name] = saved.profile;
+				}
 				showSaved("Saved");
 			} catch (error) {
 				showSaved(`Not saved: ${error.message}`, true);
 			}
-		}, 400);
+		}, 400));
 	};
 
 	const renderPeople = () => {
@@ -150,10 +155,19 @@
 
 	const render = () => {
 		$("live").textContent = describeLive(data.now);
+		renderAppearance();
 		renderPeople();
 		renderGrid();
 		renderQuiet();
 		renderFace();
+	};
+
+	const renderAppearance = () => {
+		const theme = data.profiles[person].theme === "light" ? "light" : "dark";
+		document.documentElement.dataset.theme = theme;
+		$("theme").value = theme;
+		$("network-link").href = `/unifi/?from=household&theme=${theme}`;
+		$("network-section").hidden = !data.features.some((feature) => feature.key === "unifi");
 	};
 
 	const bindQuiet = () => {
@@ -206,13 +220,18 @@
 			setTimeout(start, 3000);
 			return;
 		}
-		let remembered = null;
+		let remembered;
 		try {
 			remembered = localStorage.getItem(PERSON_KEY);
 		} catch {
 			remembered = null;
 		}
 		person = data.people.includes(remembered) ? remembered : data.people[0];
+		$("theme").addEventListener("change", (event) => {
+			data.profiles[person].theme = event.target.value;
+			renderAppearance();
+			save();
+		});
 		bindQuiet();
 		bindEnroll();
 		render();

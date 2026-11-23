@@ -159,6 +159,7 @@ Module.register("MMM-Household", {
 		});
 
 		const body = document.body;
+		document.documentElement.dataset.theme = this.view.theme === "light" ? "light" : "dark";
 		[...body.classList].filter((name) => name.startsWith("profile-")).forEach((name) => body.classList.remove(name));
 		body.classList.add(`profile-${this.view.person || "nobody"}`);
 	}

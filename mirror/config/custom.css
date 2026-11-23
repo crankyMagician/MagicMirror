@@ -3,6 +3,105 @@
 
 /* Third-party modules that need a little help in the portrait layout. */
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: #000;
+  --color-text: #b1bac5;
+  --color-text-dimmed: #929daa;
+  --color-text-bright: #fff;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-background: #f5f7f9;
+  --color-text: #34485b;
+  --color-text-dimmed: #526477;
+  --color-text-bright: #182838;
+}
+
+:root[data-theme="light"] body.profile-heather {
+  --mirror-accent: #94416a;
+}
+
+/* Third-party text with fixed white/grey colors needs an explicit theme.
+ * Photographs, moon artwork and Pokémon sprites keep their original colors. */
+:root[data-theme="light"] .MMM-DailyPokemon #poke-name,
+:root[data-theme="light"] .MMM-CountEvents .title,
+:root[data-theme="light"] .MMM-CountEvents .mm-time-parts.integer,
+:root[data-theme="light"] .MMM-History .history-header,
+:root[data-theme="light"] .MMM-History .history-item,
+:root[data-theme="light"] .MMM-MoonPhase,
+:root[data-theme="light"] .MMM-CoupleDays,
+:root[data-theme="light"] .MMM-CountEvents,
+:root[data-theme="light"] .MMM-History,
+:root[data-theme="light"] .MMM-PokemonGOEvents {
+  color: var(--color-text);
+}
+
+:root[data-theme="light"] .MMM-DailyPokemon #poke-name {
+  border-bottom-color: var(--color-text-dimmed);
+}
+
+:root[data-theme="light"] .MMM-PokemonGOEvents .event-container.leekduck > .inner {
+  background-color: var(--color-background);
+}
+
+/* Make room for the inventory without overlapping the greeting or the
+ * bottom columns. These positions apply only while the panel is visible. */
+body:has(.MMM-UniFi:not(.hidden)) .region.upper.third {
+  top: 14%;
+}
+
+body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
+  font-size: 40px;
+  letter-spacing: 0;
+}
+
+@media (orientation: portrait) {
+  body:has(.MMM-UniFi:not(.hidden)) .region.middle.center {
+    top: 41%;
+  }
+}
+
+/* Leave a readable central area in the landscape bench layout. */
+@media (orientation: landscape) {
+  body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
+    font-size: 30px;
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .region.upper.third {
+    top: 10%;
+  }
+
+  body .MMM-Greeter .greeter-sprite {
+    width: 96px;
+    height: 96px;
+  }
+
+  body .MMM-DailyPokemon #poke-pic,
+  body .MMM-DailyPokemon #poke-pic-grayscale {
+    width: 100px;
+  }
+
+  body .MMM-DailyPokemon #poke-pic-type,
+  body .MMM-DailyPokemon #poke-pic-grayscale-type {
+    width: 32px;
+  }
+
+  body .MMM-APOD img {
+    height: 220px;
+    width: auto;
+    object-fit: contain;
+  }
+
+  body .MMM-WordOfTheDay .wotd-summary {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+}
+
 /* Word of the day ships without styles of its own. */
 .MMM-WordOfTheDay {
   max-width: 420px;

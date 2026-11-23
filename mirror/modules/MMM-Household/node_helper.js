@@ -7,6 +7,7 @@ const express = require("express");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
 const { DEFAULT_BLOCKS, ProfileStore, problemWith, viewFor } = require("./profiles");
+const { addUniFiRoutes } = require("./unifi-routes");
 
 const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-data");
 const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
@@ -65,6 +66,7 @@ module.exports = NodeHelper.create({
 			next();
 		});
 		this.addRoutes(app);
+		addUniFiRoutes(app, { port: global.config.port || 8080, basePath: global.config.basePath || "/" });
 		this.settingsServer = app.listen(options.settingsPort, "0.0.0.0", () => {
 			Log.log(`Settings page listening on port ${options.settingsPort}`);
 		});
@@ -117,7 +119,7 @@ module.exports = NodeHelper.create({
 				blocks: this.blocks,
 				features: this.features,
 				profiles: Object.fromEntries(this.config.people.map((name) => [name, this.profileOf(name)])),
-				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, screenOn: this.screenOn, camera: this.presence !== null }
+				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, theme: view.theme, screenOn: this.screenOn, camera: this.presence !== null }
 			});
 		});
 
@@ -133,7 +135,7 @@ module.exports = NodeHelper.create({
 				return;
 			}
 			try {
-				this.store.set(name, req.body);
+				this.store.set(name, { ...req.body, theme: req.body.theme ?? this.profileOf(name).theme });
 			} catch (error) {
 				Log.error(`Could not save the profile of ${name}: ${error.message}`);
 				res.status(500).json({ error: "The mirror could not save that" });

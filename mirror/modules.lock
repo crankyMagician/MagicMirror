@@ -17,3 +17,6 @@ MMM-History             https://github.com/cowboysdude/MMM-History        8a25a9
 # MMM-DailyPokemon: pickByDate and favorites options.
 MMM-PokemonGOEvents     https://github.com/crankyMagician/MMM-PokemonGOEvents  b5e9a490a24ce96f7ad1c50013573bc19a2050cb  none
 MMM-DailyPokemon        https://github.com/crankyMagician/MMM-DailyPokemon     3860e086dd1e9e3dac8824a03d66dc9fb5cd1088  none
+
+# Private standalone module; install-modules.sh uses its read-only deploy key.
+MMM-UniFi                git@github.com:crankyMagician/MMM-UniFi.git          36770c61071eddbfdd528cbcd71911279c653f84  none
