@@ -54,6 +54,14 @@ const picturesIn = (feed, feedUrl, max) => {
  */
 const pictureName = (updated, url, kind) => fileNameFor(`${updated}\n${url}`, kind);
 
+const countPictures = (folder) => {
+	try {
+		return fs.readdirSync(folder).filter((name) => name.endsWith(".jpg") || name.endsWith(".png")).length;
+	} catch {
+		return 0;
+	}
+};
+
 /**
  * Brings one folder in line with one feed.
  * @param {object} options what to fetch and where to put it
@@ -113,8 +121,7 @@ const syncFeed = async ({ feedUrl, folder, max = 100, fetch: get = fetch }) => {
 			}
 		}
 	}
-	const count = fs.readdirSync(folder).filter((name) => name.endsWith(".jpg") || name.endsWith(".png")).length;
-	return { name: String(feed.name || ""), updated, count, added, removed };
+	return { name: String(feed.name || ""), updated, count: countPictures(folder), added, removed };
 };
 
 /**
@@ -140,7 +147,8 @@ const addArtRoutes = (app, { feeds, artDir, log }) => {
 			}
 		} catch (error) {
 			log.warn(`The art feed for ${person} could not be read: ${error.message}`);
-			state.set(person, { ...(state.get(person) || { count: 0, name: "", updated: "" }), note: "The mirror could not reach the art feed. It will try again." });
+			// The frame keeps showing what it already has.
+			state.set(person, { name: "", updated: "", ...state.get(person), count: countPictures(path.join(artDir, person)), note: "The mirror could not reach the art feed. It will try again." });
 			wait = RETRY_AFTER;
 		}
 		const timer = setTimeout(() => check(person), wait);
