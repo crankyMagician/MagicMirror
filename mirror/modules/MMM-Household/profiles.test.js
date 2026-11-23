@@ -304,3 +304,13 @@ test("problemWithMirror checks a submitted name and candidate phrase", () => {
 	assert.match(problemWithMirror({ ...good, wakeCandidate: "Hey Mirror" }), /plain words/);
 	assert.match(problemWithMirror({ ...good, wakeCandidate: 7 }), /plain words/);
 });
+
+test("the mirror keeps a valid screen direction and drops anything else", () => {
+	assert.equal(defaultMirror().rotation, "");
+	assert.equal(normalizeMirror({ rotation: "270" }).rotation, "270");
+	assert.equal(normalizeMirror({ rotation: "sideways" }).rotation, "");
+	assert.equal(normalizeMirror({ rotation: 90 }).rotation, "");
+	const good = defaultMirror();
+	assert.equal(problemWithMirror({ ...good, rotation: "normal" }), null);
+	assert.match(problemWithMirror({ ...good, rotation: "output * disable" }), /rotation must be one of/);
+});

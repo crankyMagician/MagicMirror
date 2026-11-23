@@ -10,6 +10,7 @@ const { createLogin, hostAllowed, mayActFor, ownOnly } = require("../../lib/hous
 const { DEFAULTS: SPEAK_DEFAULTS } = require("../MMM-Speak/speech");
 const { createSynth } = require("../MMM-Speak/synth");
 const { ProfileStore, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
+const { ROTATIONS, currentRotation, swayArguments } = require("./rotation");
 const { addUniFiRoutes } = require("./unifi-routes");
 const { addVoiceRoutes, voicesOn } = require("./voice-routes");
 const { createVocabularyCheck, phraseProblem, startsWithPhrase, tidyPhrase } = require("./wake-phrase");
@@ -48,12 +49,22 @@ module.exports = NodeHelper.create({
 		this.offTimer = null;
 		this.restartDelay = 2000;
 		this.stopping = false;
+		// Which way the picture faces right now, as sway reports it.
+		this.rotationNow = "";
 
 		// Quiet hours and the blocks of the day change with the clock, not with
 		// the camera, so the view is recomputed on a timer as well.
 		this.clock = setInterval(() => this.refresh(), 30000);
 
 		this.startSettingsServer();
+		// A direction saved on the settings page wins over the kiosk's
+		// output.conf. This runs before the window opens, so nothing turns on
+		// screen at start.
+		if (this.mirror.rotation) {
+			this.applyRotation();
+		} else {
+			this.readRotation();
+		}
 	},
 
 	/**
@@ -177,6 +188,9 @@ module.exports = NodeHelper.create({
 				enrolled: this.enrolled,
 				blocks: this.blocks,
 				mirror: this.mirror,
+				// The directions the screen can face, and the one it faces now.
+				rotations: ROTATIONS,
+				rotationNow: this.mirror.rotation || this.rotationNow,
 				voices: voicesOn(this.speakConfig()),
 				features: this.features,
 				profiles: Object.fromEntries(people.map((name) => [name, this.profileOf(name)])),
@@ -217,7 +231,8 @@ module.exports = NodeHelper.create({
 			// The page does not set the wake phrase. It proposes a candidate, and
 			// the candidate takes over once the mirror has heard it. A page from
 			// before the mirror had a voice or a name does not send those. Keep them.
-			const next = { voice: this.mirror.voice, name: this.mirror.name, ...req.body, wakePhrase: this.mirror.wakePhrase, wakeCandidate: this.mirror.wakeCandidate };
+			const next = { voice: this.mirror.voice, name: this.mirror.name, rotation: this.mirror.rotation, ...req.body, wakePhrase: this.mirror.wakePhrase, wakeCandidate: this.mirror.wakeCandidate };
+			const turned = next.rotation !== this.mirror.rotation;
 			if (req.body.wakeCandidate !== undefined) {
 				const candidate = tidyPhrase(req.body.wakeCandidate);
 				if (candidate === "" || candidate === this.mirror.wakePhrase) {
@@ -253,6 +268,9 @@ module.exports = NodeHelper.create({
 			this.mirror = this.store.getMirror();
 			this.blocks = this.mirror.blocks;
 			Log.log("Saved the mirror settings");
+			if (turned && this.mirror.rotation) {
+				this.applyRotation();
+			}
 			this.sendMirror();
 			this.refresh();
 			res.json({ mirror: this.mirror });
@@ -547,6 +565,41 @@ module.exports = NodeHelper.create({
 				this.setScreen(false);
 			}
 		}, this.config.absentDelay * 1000);
+	},
+
+	/**
+	 * Turns the picture to the saved direction. sway keeps a direction that
+	 * is set while the screen is off and uses it when the screen comes back.
+	 */
+	applyRotation () {
+		const rotation = this.mirror.rotation;
+		if (!process.env.SWAYSOCK) {
+			Log.log(`Screen direction ${rotation} (skipped, not running under sway)`);
+			return;
+		}
+		execFile("swaymsg", swayArguments(rotation), (error) => {
+			if (error) {
+				Log.error(`swaymsg failed: ${error.message}`);
+			} else {
+				this.rotationNow = rotation;
+				Log.log(`Screen direction set to ${rotation}`);
+			}
+		});
+	},
+
+	/**
+	 * Asks sway which way the picture faces, for the settings page to show
+	 * before anyone has chosen a direction there.
+	 */
+	readRotation () {
+		if (!process.env.SWAYSOCK) {
+			return;
+		}
+		execFile("swaymsg", ["-t", "get_outputs", "-r"], (error, stdout) => {
+			if (!error) {
+				this.rotationNow = currentRotation(stdout) || this.rotationNow;
+			}
+		});
 	},
 
 	setScreen (on) {

@@ -252,6 +252,30 @@
 		$("quiet-to").disabled = !quiet.enabled;
 	};
 
+	// The direction the picture faces. Until someone chooses one here, the
+	// menu shows the direction the kiosk started with.
+	const renderRotation = () => {
+		const menu = $("rotation");
+		const offered = data.rotations || [];
+		const current = data.mirror.rotation || data.rotationNow || "";
+		const options = offered.map((rotation) => el("option", { value: rotation.value, textContent: rotation.label }));
+		if (!offered.some((rotation) => rotation.value === current)) {
+			options.unshift(el("option", { value: "", textContent: "As the mirror started" }));
+		}
+		menu.replaceChildren(...options);
+		menu.value = offered.some((rotation) => rotation.value === current) ? current : "";
+		menu.closest("section").hidden = offered.length === 0;
+	};
+
+	const bindRotation = () => {
+		$("rotation").addEventListener("change", (event) => {
+			if (event.target.value) {
+				data.mirror.rotation = event.target.value;
+				saveMirror();
+			}
+		});
+	};
+
 	// One time field per part of the day.
 	const renderParts = () => {
 		const rows = data.mirror.blocks.map((block) => {
@@ -466,6 +490,7 @@
 		renderGrid();
 		renderQuiet();
 		renderParts();
+		renderRotation();
 		renderVoice();
 		renderWake();
 		renderFace();
@@ -635,6 +660,7 @@
 			save();
 		});
 		bindQuiet();
+		bindRotation();
 		bindVoice();
 		bindWake();
 		bindEnroll();
