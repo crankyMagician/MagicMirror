@@ -1,7 +1,7 @@
 /* The settings page for the mirror. It talks to MMM-Household's node_helper
- * through /household/api and saves every change as it is made. */
+ * through /api on the same port and saves every change as it is made. */
 (function () {
-	const API = "/household/api";
+	const API = "/api";
 	const PERSON_KEY = "household.person";
 
 	let data = null;

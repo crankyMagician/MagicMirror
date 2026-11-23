@@ -1,3 +1,76 @@
 /* Styles for the household mirror. setup-pi.sh links this file to
- * config/custom.css on the Pi. Layout tweaks for the portrait panel and the
- * per-person themes go here. */
+ * config/custom.css on the Pi. */
+
+/* Third-party modules that need a little help in the portrait layout. */
+
+/* Word of the day ships without styles of its own. */
+.MMM-WordOfTheDay {
+  max-width: 420px;
+}
+
+.MMM-WordOfTheDay .wotd-title {
+  color: var(--color-text-bright);
+  font-size: var(--font-size-medium);
+  line-height: 1.3;
+}
+
+.MMM-WordOfTheDay .wotd-type,
+.MMM-WordOfTheDay .wotd-summary {
+  display: block;
+  font-size: var(--font-size-xsmall);
+  line-height: 1.35;
+}
+
+.MMM-WordOfTheDay .wotd-examples {
+  display: none;
+}
+
+/* Countdowns: drop the list indent so they line up with the calendar. */
+.MMM-CountEvents .CE,
+.MMM-CountEvents dl,
+.MMM-CountEvents dd {
+  margin: 0;
+  padding: 0;
+}
+
+.MMM-CountEvents dl {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+/* Pokémon of the day: the module's offsets assume its stats table is on. */
+.MMM-DailyPokemon #poke-wrapper {
+  margin-right: 0;
+}
+
+.MMM-DailyPokemon #flex-wrapper div {
+  height: auto;
+}
+
+.MMM-DailyPokemon #poke-name {
+  margin-bottom: 26px;
+}
+
+.MMM-DailyPokemon #poke-pic,
+.MMM-DailyPokemon #poke-pic-grayscale {
+  bottom: 0;
+  width: 150px;
+}
+
+.MMM-DailyPokemon #poke-pic-type,
+.MMM-DailyPokemon #poke-pic-grayscale-type {
+  bottom: 0;
+  width: 44px;
+}
+
+/* Heather's view: one soft accent on headers, nothing louder. */
+body.profile-heather {
+  --mirror-accent: #f2b8d2;
+}
+
+body.profile-heather header,
+body.profile-heather .module-header {
+  border-bottom-color: color-mix(in srgb, var(--mirror-accent) 55%, transparent);
+  color: var(--mirror-accent);
+}

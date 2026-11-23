@@ -1,0 +1,19 @@
+# Third-party MagicMirror modules for the mirror, pinned to exact commits.
+# deploy/install-modules.sh clones each one into ~/MagicMirror/modules.
+#
+# name                  repository                                        commit                                    install
+# install is "none" for modules without runtime dependencies, or "npm" to
+# install them with npm (scripts disabled).
+MMM-MoonPhase           https://github.com/NolanKingdon/MMM-MoonPhase     744263fe6ceea6ac3239b1d77ed6444205387db6  none
+MMM-APOD                https://github.com/grenagit/MMM-APOD              e1aaee3908afaf20bf296d07c0437f9aab921c5a  none
+MMM-CoupleDays          https://github.com/wiesty/MMM-CoupleDays          4f3fa348935c56d6a45912bbd61eb2b1807b9853  none
+MMM-CountEvents         https://github.com/MMRIZE/MMM-CountEvents         5102b72b928164ffe058359587cec9b906489aac  none
+MMM-CustomElementTime   https://github.com/MMRIZE/MMM-CustomElementTime   91212985f490e7948cffe82f5693fb61cc6b681d  none
+MMM-WordOfTheDay        https://github.com/jmwyds/MMM-WordOfTheDay        aff576251b4b25951c5edd988d8fda875bb8c709  npm
+MMM-History             https://github.com/cowboysdude/MMM-History        8a25a9c6aacd1b7bb83fae6f1481741dfd07c829  none
+
+# Our forks, on their mirror-fixes branches.
+# MMM-PokemonGOEvents: built-in fetch in place of the request package, and it keeps polling after an error.
+# MMM-DailyPokemon: pickByDate and favorites options.
+MMM-PokemonGOEvents     https://github.com/crankyMagician/MMM-PokemonGOEvents  b5e9a490a24ce96f7ad1c50013573bc19a2050cb  none
+MMM-DailyPokemon        https://github.com/crankyMagician/MMM-DailyPokemon     3860e086dd1e9e3dac8824a03d66dc9fb5cd1088  none

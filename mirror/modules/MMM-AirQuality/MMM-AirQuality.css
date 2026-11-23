@@ -1,0 +1,16 @@
+.air-quality-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.air-quality-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.air-quality-label {
+  color: var(--color-text-dimmed);
+}

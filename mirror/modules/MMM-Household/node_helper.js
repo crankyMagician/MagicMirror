@@ -12,6 +12,9 @@ const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-
 const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
 const PROFILES_FILE = path.join(DATA_DIR, "profiles.json");
 
+// Options the helper needs before the browser sends its config.
+const SERVER_DEFAULTS = { settingsPort: 8081, settingsAllow: ["127.0.0.1", "::1"] };
+
 module.exports = NodeHelper.create({
 	start () {
 		this.config = null;
@@ -32,12 +35,44 @@ module.exports = NodeHelper.create({
 		// the camera, so the view is recomputed on a timer as well.
 		this.clock = setInterval(() => this.refresh(), 30000);
 
-		this.addRoutes();
+		this.startSettingsServer();
+	},
+
+	/**
+	 * Serves the settings page and its API on a port of their own.
+	 *
+	 * MagicMirror itself listens on localhost only. Third-party modules often
+	 * trust whatever reaches MagicMirror's socket and routes, so nothing but
+	 * this page is offered to the home network.
+	 */
+	startSettingsServer () {
+		const options = { ...SERVER_DEFAULTS, ...this.getServerModuleConfig() };
+		// MagicMirror's own middleware: refuses other origins and addresses outside the list.
+		const { ipAccessControl } = require(path.join(global.root_path, "js", "ip_access_control"));
+		const app = express();
+		app.disable("x-powered-by");
+		app.use(ipAccessControl(options.settingsAllow, []));
+		app.use((req, res, next) => {
+			res.set({
+				"Content-Security-Policy": "default-src 'self'",
+				"X-Content-Type-Options": "nosniff",
+				"Referrer-Policy": "no-referrer"
+			});
+			next();
+		});
+		this.addRoutes(app);
+		this.settingsServer = app.listen(options.settingsPort, "0.0.0.0", () => {
+			Log.log(`Settings page listening on port ${options.settingsPort}`);
+		});
+		this.settingsServer.on("error", (error) => Log.error(`The settings page could not start: ${error.message}`));
 	},
 
 	stop () {
 		this.stopping = true;
 		clearInterval(this.clock);
+		if (this.settingsServer) {
+			this.settingsServer.close();
+		}
 		this.cancelScreenOff();
 		if (this.presence) {
 			this.presence.kill();
@@ -46,8 +81,7 @@ module.exports = NodeHelper.create({
 		this.setScreen(true);
 	},
 
-	addRoutes () {
-		const app = this.expressApp;
+	addRoutes (app) {
 		const publicDir = path.join(fs.realpathSync(this.path), "public");
 		const json = express.json({ limit: "20kb" });
 		// A request that changes something must be JSON. A web page on another
@@ -60,13 +94,14 @@ module.exports = NodeHelper.create({
 			next();
 		};
 
-		app.get("/household", (req, res) => res.sendFile(path.join(publicDir, "settings.html")));
+		app.get("/", (req, res) => res.sendFile(path.join(publicDir, "settings.html")));
+		app.use(express.static(publicDir, { index: false }));
 
-		app.get("/household/api/status", (req, res) => {
+		app.get("/api/status", (req, res) => {
 			res.json({ person: this.person, people: this.enrolled, screenOn: this.screenOn, running: this.presence !== null });
 		});
 
-		app.get("/household/api/state", (req, res) => {
+		app.get("/api/state", (req, res) => {
 			if (!this.config) {
 				res.status(503).json({ error: "The mirror is still starting" });
 				return;
@@ -82,7 +117,7 @@ module.exports = NodeHelper.create({
 			});
 		});
 
-		app.put("/household/api/profiles/:name", jsonOnly, json, (req, res) => {
+		app.put("/api/profiles/:name", jsonOnly, json, (req, res) => {
 			const name = req.params.name;
 			if (!this.config || !this.config.people.includes(name)) {
 				res.status(404).json({ error: "Nobody on this mirror has that name" });
@@ -105,7 +140,7 @@ module.exports = NodeHelper.create({
 			res.json({ profile: this.profileOf(name) });
 		});
 
-		app.post("/household/api/enroll", jsonOnly, json, (req, res) => {
+		app.post("/api/enroll", jsonOnly, json, (req, res) => {
 			const name = String((req.body && req.body.name) || "");
 			if (!this.config || !this.config.people.includes(name)) {
 				res.status(400).json({ error: "Give the name of someone on this mirror" });

@@ -12,7 +12,7 @@
  * for anyone, including a guest.
  *
  * Each person can also switch features on and off for each part of the day
- * on the settings page at /household. A feature is a module name. Give a
+ * on the settings page, which this module serves on its own port (8081). A feature is a module name. Give a
  * module the class `feature-NAME` to list it separately from other modules
  * with the same name, as the config does for the weather forecast.
  */
@@ -26,10 +26,18 @@ Module.register("MMM-Household", {
 		holdSeconds: 8,
 		camera: "/dev/video0",
 		// Milliseconds for the fade when modules appear and disappear.
-		fadeSpeed: 800
+		fadeSpeed: 800,
+		// Names for features on the settings page, by feature key. They add to
+		// and override the built-in names below. A feature without a name uses
+		// the module's header, then its key.
+		labels: {},
+		// The settings page has a port of its own, and these addresses may open
+		// it. Use CIDR ranges for the home network, for example "192.168.1.0/24".
+		settingsPort: 8081,
+		settingsAllow: ["127.0.0.1", "::1"]
 	},
 
-	// Names shown on the settings page. Other modules use their header or name.
+	// Names shown on the settings page for MagicMirror's default modules.
 	featureLabels: {
 		clock: "Clock",
 		weather: "Weather now",
@@ -63,8 +71,15 @@ Module.register("MMM-Household", {
 		}
 	},
 
+	/**
+	 * Tells whether this module shows and hides the given module. Modules
+	 * without a position draw nothing, so they are left alone and are not
+	 * offered on the settings page.
+	 * @param {object} module a MagicMirror module
+	 * @returns {boolean} true for a visible module other than this one and alert
+	 */
 	isManaged (module) {
-		return module.name !== this.name && module.name !== "alert";
+		return module.name !== this.name && module.name !== "alert" && Boolean(module.data.position);
 	},
 
 	classesOf (module) {
@@ -97,7 +112,8 @@ Module.register("MMM-Household", {
 				// A feature with one instance per person belongs to all of them.
 				known.owners = known.owners.length === 0 || owners.length === 0 ? [] : [...new Set([...known.owners, ...owners])];
 			} else {
-				features.set(key, { key, label: this.featureLabels[key] || module.data.header || key, owners });
+				const label = this.config.labels[key] || this.featureLabels[key] || module.data.header || key;
+				features.set(key, { key, label, owners });
 			}
 		});
 		return [...features.values()];
