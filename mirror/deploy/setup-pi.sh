@@ -74,6 +74,9 @@ as_user "
 	mkdir -p '$MIRROR_HOME/mirror-data'
 "
 
+echo "==> Third-party modules"
+as_user "'$DEPLOY_DIR/install-modules.sh'"
+
 echo "==> Face recognition service"
 DATA_DIR="$MIRROR_HOME/mirror-data"
 MODEL_BASE=https://github.com/opencv/opencv_zoo/raw/main/models

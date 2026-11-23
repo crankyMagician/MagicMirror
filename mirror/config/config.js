@@ -7,13 +7,12 @@
  * starts with SECRET_ from the copy of this config it sends to the browser.
  */
 let config = {
-	// The mirror listens on the home network so phones can open the settings
-	// page at http://mirror.local:8080/household. The whitelist limits that to
-	// the two home subnets.
-	address: "0.0.0.0",
+	// MagicMirror answers only on the Pi itself. The settings page that phones
+	// open is served separately by MMM-Household (see settingsPort below).
+	address: "localhost",
 	port: 8080,
 	basePath: "/",
-	ipWhitelist: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
+	ipWhitelist: ["127.0.0.1", "::1"],
 
 	language: "en",
 	locale: "en-US",
@@ -32,7 +31,23 @@ let config = {
 			module: "MMM-Household",
 			config: {
 				people: ["sam", "heather"],
-				absentDelay: 60
+				absentDelay: 60,
+				// The settings page: http://mirror.local:8081/ from the home network.
+				settingsPort: 8081,
+				settingsAllow: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
+				// Names on the settings page for the third-party modules below.
+				labels: {
+					"MMM-MoonPhase": "Moon",
+					"MMM-APOD": "Space picture",
+					"MMM-CoupleDays": "Days together",
+					"MMM-CountEvents": "Countdowns",
+					"MMM-WordOfTheDay": "Word of the day",
+					"MMM-History": "On this day",
+					"MMM-PokemonGOEvents": "Pokémon GO events",
+					"MMM-DailyPokemon": "Pokémon of the day",
+					"MMM-AirQuality": "Air quality",
+					"MMM-Greeter": "Greeting"
+				}
 			}
 		},
 		{
@@ -91,9 +106,132 @@ let config = {
 			}
 		},
 		{
-			module: "compliments",
+			module: "MMM-AirQuality",
+			classes: "heather",
+			position: "top_right",
+			config: {
+				lat: Number("${MIRROR_LAT}"),
+				lon: Number("${MIRROR_LON}")
+			}
+		},
+		{
+			module: "MMM-MoonPhase",
+			classes: "heather",
+			position: "top_right",
+			config: {
+				size: 110,
+				title: false,
+				alpha: 0.85
+			}
+		},
+		{
+			// Shows only once MIRROR_TOGETHER_SINCE has a date in config.env.
+			module: "MMM-CoupleDays",
+			classes: "heather",
+			position: "top_left",
+			disabled: "${MIRROR_TOGETHER_SINCE}" === "",
+			config: {
+				name1: "Sam",
+				name2: "Heather",
+				date: "${MIRROR_TOGETHER_SINCE}"
+			}
+		},
+		{
+			// MMM-CountEvents needs this helper module. It draws nothing.
+			module: "MMM-CustomElementTime"
+		},
+		{
+			module: "MMM-CountEvents",
 			classes: "sam heather",
-			position: "lower_third"
+			position: "top_left",
+			config: {
+				events: [
+					{
+						title: "Christmas",
+						targetTime: "25 Dec 2026",
+						repeat: "yearly",
+						unit: "day"
+					}
+				]
+			}
+		},
+		{
+			// Greets a recognized person. Heather's greeting comes with one of
+			// her favorite Pokémon, a different one each day.
+			module: "MMM-Greeter",
+			position: "upper_third",
+			config: {
+				people: {
+					sam: { name: "Sam" },
+					heather: { name: "Heather", favorites: ["mew", "miltank", "celesteela"] }
+				}
+			}
+		},
+		{
+			module: "compliments",
+			classes: "sam",
+			position: "middle_center"
+		},
+		{
+			module: "compliments",
+			classes: "heather",
+			position: "middle_center",
+			config: {
+				// Starter lines. Sam replaces these with his own.
+				compliments: {
+					anytime: ["You look lovely today, Heather.", "A wild Heather appeared!", "Today feels like a shiny day."],
+					morning: ["Good morning, Heather. Go catch the day.", "Coffee first, then the world."],
+					afternoon: ["You are doing great today.", "Super effective, as always."],
+					evening: ["Welcome home, Heather.", "You made today better."]
+				}
+			}
+		},
+		{
+			module: "MMM-PokemonGOEvents",
+			classes: "sam heather",
+			header: "Pokémon GO",
+			position: "bottom_left",
+			config: {
+				category: "current",
+				maxEvents: 3,
+				truncateTitle: 42
+			}
+		},
+		{
+			module: "MMM-APOD",
+			classes: "heather",
+			position: "bottom_left",
+			config: {
+				maxMediaWidth: 420,
+				maxMediaHeight: 300
+			}
+		},
+		{
+			// A different Pokémon each day, picked from the date.
+			module: "MMM-DailyPokemon",
+			classes: "heather",
+			position: "bottom_right",
+			config: {
+				pickByDate: true,
+				stats: false,
+				gbaMode: false,
+				grayscale: false,
+				nameSize: 22
+			}
+		},
+		{
+			module: "MMM-WordOfTheDay",
+			classes: "heather",
+			position: "bottom_right"
+		},
+		{
+			module: "MMM-History",
+			classes: "heather",
+			position: "bottom_right",
+			config: {
+				maxWidth: "420px",
+				maxLength: 220
+			}
 		},
 		{
 			module: "newsfeed",

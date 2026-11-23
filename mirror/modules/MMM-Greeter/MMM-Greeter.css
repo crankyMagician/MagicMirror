@@ -1,0 +1,15 @@
+.greeter {
+  text-align: center;
+}
+
+.greeter-sprite {
+  display: block;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 12px;
+  object-fit: contain;
+}
+
+.greeter-companion {
+  margin-top: 6px;
+}
