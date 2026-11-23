@@ -17,6 +17,8 @@ MMM-History             https://github.com/cowboysdude/MMM-History        8a25a9
 # MMM-DailyPokemon: pickByDate and favorites options.
 MMM-PokemonGOEvents     https://github.com/crankyMagician/MMM-PokemonGOEvents  b5e9a490a24ce96f7ad1c50013573bc19a2050cb  none
 MMM-DailyPokemon        https://github.com/crankyMagician/MMM-DailyPokemon     3860e086dd1e9e3dac8824a03d66dc9fb5cd1088  none
+# MMM-GoogleCalendar: a tokenFile option, so each instance can show a different Google account.
+MMM-GoogleCalendar      https://github.com/crankyMagician/MMM-GoogleCalendar   3395eaa80f321df1c9cadf931219b6eaf1a8ba46  npm
 
 # Private standalone module; install-modules.sh uses its read-only deploy key.
 MMM-UniFi                git@github.com:crankyMagician/MMM-UniFi.git          4bfca7a8779a32f845a590bbe4c53898c53bf381  none

@@ -6,6 +6,38 @@
  * not committed (see config.env.sample). MagicMirror hides any name that
  * starts with SECRET_ from the copy of this config it sends to the browser.
  */
+// Each Google account has a token file on the Pi, written by
+// mirror/tools/google-connect.py. MagicMirror evaluates this file in Node, so
+// the paths can come from the environment. Strings are joined with + here,
+// because MagicMirror replaces dollar-brace names from the environment in
+// this file's text before it runs.
+const googleDir = (process.env.MIRROR_DATA_DIR || process.env.HOME + "/mirror-data") + "/google";
+const googleAccount = (name) => ({
+	tokenFile: googleDir + "/" + name + ".json",
+	credentialsFile: googleDir + "/credentials.json"
+});
+const googleCalendar = (person, account, header, feature) => ({
+	module: "MMM-GoogleCalendar",
+	classes: person + " feature-" + feature,
+	header,
+	position: "top_left",
+	config: {
+		...googleAccount(account),
+		maximumEntries: 4,
+		calendars: [{ symbol: "calendar-check", calendarID: "primary" }]
+	}
+});
+const googleTasks = (person, account, header, feature) => ({
+	module: "MMM-HouseholdTasks",
+	classes: person + " feature-" + feature,
+	header,
+	position: "top_left",
+	config: {
+		...googleAccount(account),
+		maxTasks: 4
+	}
+});
+
 const config = {
 	// MagicMirror answers only on the Pi itself. The settings page that phones
 	// open is served separately by MMM-Household (see settingsPort below).
@@ -37,6 +69,10 @@ const config = {
 				settingsAllow: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
 				// Names on the settings page for the third-party modules below.
 				labels: {
+					calendar: "Calendar",
+					"work-calendar": "Work calendar",
+					tasks: "Tasks",
+					"work-tasks": "Work tasks",
 					unifi: "Network devices",
 					"MMM-MoonPhase": "Moon",
 					"MMM-APOD": "Space picture",
@@ -59,6 +95,9 @@ const config = {
 				// Spoken name -> feature, for "show NAME" and "hide NAME".
 				features: {
 					calendar: "calendar",
+					"work calendar": "work-calendar",
+					tasks: "tasks",
+					"work tasks": "work-tasks",
 					weather: "weather",
 					forecast: "forecast",
 					news: "newsfeed",
@@ -77,34 +116,17 @@ const config = {
 			module: "clock",
 			position: "top_left"
 		},
-		{
-			module: "calendar",
-			classes: "sam",
-			header: "Sam's calendar",
-			position: "top_left",
-			config: {
-				calendars: [
-					{
-						symbol: "calendar-check",
-						url: "${SECRET_CALENDAR_URL_SAM}"
-					}
-				]
-			}
-		},
-		{
-			module: "calendar",
-			classes: "heather",
-			header: "Heather's calendar",
-			position: "top_left",
-			config: {
-				calendars: [
-					{
-						symbol: "calendar-check",
-						url: "${SECRET_CALENDAR_URL_HEATHER}"
-					}
-				]
-			}
-		},
+		// Google Calendar and Google Tasks, read-only, for each person's personal
+		// and Merrows accounts. An account shows a sign-in note until
+		// mirror/tools/google-connect.py has been run for it.
+		googleCalendar("sam", "sam-personal", "Calendar", "calendar"),
+		googleCalendar("sam", "sam-merrows", "Merrows calendar", "work-calendar"),
+		googleCalendar("heather", "heather-personal", "Calendar", "calendar"),
+		googleCalendar("heather", "heather-merrows", "Merrows calendar", "work-calendar"),
+		googleTasks("sam", "sam-personal", "Tasks", "tasks"),
+		googleTasks("sam", "sam-merrows", "Merrows tasks", "work-tasks"),
+		googleTasks("heather", "heather-personal", "Tasks", "tasks"),
+		googleTasks("heather", "heather-merrows", "Merrows tasks", "work-tasks"),
 		{
 			module: "weather",
 			position: "top_right",

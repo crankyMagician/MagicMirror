@@ -15,10 +15,11 @@ Modules from the MagicMirror module directory are not copied into this repositor
 
 To add or update a module, read its code first (the helper especially: what it fetches, what it writes, whether it runs commands), then add or change its line in `modules.lock` and run the setup script.
 
-Two modules are our forks, each on a `mirror-fixes` branch:
+Three modules are our forks, each on a `mirror-fixes` branch:
 
 - `crankyMagician/MMM-PokemonGOEvents` uses the built-in `fetch` and keeps polling after a network error.
 - `crankyMagician/MMM-DailyPokemon` adds `pickByDate`, so the Pokémon holds for the whole day, and a `favorites` list.
+- `crankyMagician/MMM-GoogleCalendar` adds `tokenFile`, so each instance can show a different Google account.
 
 Our own modules live in `modules/` here and are linked into place by the setup script:
 
@@ -26,6 +27,7 @@ Our own modules live in `modules/` here and are linked into place by the setup s
 - `MMM-Greeter`: a greeting when a person is recognized. A person with `favorites` gets one of those Pokémon beside it, a different one each day. The pictures are downloaded once to `~/mirror-data/sprites` and are not part of this repository. It sends `TTS_SAY` for a speech module to say the greeting.
 - `MMM-AirQuality`: the US air quality index from Open-Meteo, with no account needed.
 
+- `MMM-HouseholdTasks`: the open tasks of one Google account, read-only.
 - `MMM-Voice`: offline voice commands, described below.
 
 Run the tests on the Pi with:
@@ -35,6 +37,24 @@ cd ~/MagicMirror
 node --test "mirror/modules/**/*.test.js"
 ~/mirror-data/venv/bin/python -m unittest discover -s mirror/services
 ```
+
+## Google calendars and tasks
+
+Each person's Google accounts show on their view, read-only: calendars through our fork of `MMM-GoogleCalendar` and tasks through `MMM-HouseholdTasks`. `config.js` has one calendar instance and one tasks instance per account, built by the `googleCalendar` and `googleTasks` helpers at the top of the file.
+
+One Google Cloud project with one Desktop OAuth client serves every account. Its client file is `~/mirror-data/google/credentials.json` on the Pi. Each account has its own token file beside it, named after the account (`sam-personal.json`, `heather-merrows.json`).
+
+To connect an account, run this on a computer with a browser and SSH access to the Pi, and sign in as that account when the Google page opens:
+
+```sh
+mirror/tools/google-connect.py heather-personal --email her.address@example.com
+```
+
+The tool asks for read-only access to Google Calendar and Google Tasks, and writes the token to the Pi with mode 600. It writes nothing on the computer it runs on. The mirror notices the new file within a few minutes. Until an account is connected, its modules show a short sign-in note.
+
+To disconnect an account, delete its token file on the Pi and remove the app at https://myaccount.google.com/permissions.
+
+Directory modules considered for tasks: `MMM-GoogleTasks` and `MMM-Tasks` both send results to every instance with nothing to tell accounts apart, so neither can show two accounts side by side. `MMM-HouseholdTasks` is our own for that reason.
 
 ## Voice commands
 
@@ -159,9 +179,9 @@ The module needs no runtime npm dependencies. Its separate repository documents 
 
 The directory alternatives reviewed were MMM-NetworkScanner/MMM-MacAddressScan (presence scanning), the UniFi guest/voucher modules (guest access), and MMM-UniFiProtect (cameras). None covered a complete controller inventory with network membership and phone browsing.
 
-### Weather and calendars
+### Weather, dates and countdowns
 
-`~/MagicMirror/config/config.env` holds the home coordinates for the weather and the calendar's iCal link. `config.env.sample` lists the names. MagicMirror hides names that start with `SECRET_` from the browser.
+`~/MagicMirror/config/config.env` holds the home coordinates for the weather, the date the days-together counter starts from, and the countdown events. `config.env.sample` lists the names. MagicMirror hides names that start with `SECRET_` from the browser.
 
 ## Take a screenshot over SSH
 
