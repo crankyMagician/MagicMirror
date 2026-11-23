@@ -26,3 +26,11 @@ test("the chime is a valid short WAV file", () => {
 	assert.equal(wav.readUInt32LE(40), wav.length - 44);
 	assert.ok(wav.length < 22050 * 2);
 });
+
+test("with several wake phrases every command answers to each of them", () => {
+	const commands = buildCommands({ wakeWord: "mirror", wakeWords: ["mirror", "hey mirror"], commands: { good_night: ["good night"] }, features: { news: "newsfeed" } });
+	assert.deepEqual(commands.find((command) => command.id === "good_night").phrases, ["mirror good night", "hey mirror good night"]);
+	assert.deepEqual(commands.find((command) => command.id === "show:newsfeed").phrases, ["mirror show news", "hey mirror show news", "mirror show the news", "hey mirror show the news"]);
+	// An empty list falls back to the one wake word.
+	assert.deepEqual(buildCommands({ wakeWord: "mirror", wakeWords: [], commands: { wake_up: ["wake up"] } })[0].phrases, ["mirror wake up"]);
+});

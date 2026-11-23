@@ -338,6 +338,57 @@
 		$("mirror-voice-hear").addEventListener("click", () => hear($("mirror-voice").value, $("mirror-voice-note")));
 	};
 
+	// The mirror's name, and the words said before every command.
+	const renderWake = () => {
+		const mirror = data.mirror;
+		$("mirror-title").textContent = mirror.name || "Mirror";
+		if (document.activeElement !== $("mirror-name")) {
+			$("mirror-name").value = mirror.name || "Mirror";
+		}
+		const phrase = mirror.wakePhrase || "mirror";
+		$("wake-current").textContent = `You say "${phrase}" before every command, as in "${phrase}, good morning".`;
+		const trying = Boolean(mirror.wakeCandidate);
+		$("wake-cancel").hidden = !trying;
+		if (trying) {
+			$("wake-note").textContent = `The mirror is also listening for "${mirror.wakeCandidate}". Say "${mirror.wakeCandidate}, wake up" at the mirror. The new phrase takes over once the mirror has heard it, and "${phrase}" keeps working until then.`;
+		}
+	};
+
+	const bindWake = () => {
+		$("mirror-name").addEventListener("change", (event) => {
+			const name = event.target.value.trim();
+			if (name) {
+				data.mirror.name = name;
+				$("mirror-title").textContent = name;
+				saveMirror();
+			}
+		});
+		// The mirror checks a new phrase against its speech model, which takes
+		// a few seconds, so this is sent at once and the answer shown.
+		const propose = async (candidate) => {
+			$("wake-note").textContent = candidate ? "Checking that the mirror knows those words" : "";
+			try {
+				const saved = await send("PUT", "/mirror", { ...structuredClone(data.mirror), wakeCandidate: candidate });
+				data.mirror = saved.mirror;
+				data.blocks = saved.mirror.blocks;
+				if (!saved.mirror.wakeCandidate) {
+					$("wake-note").textContent = candidate ? "That is the phrase the mirror already uses." : "";
+				}
+				$("wake-new").value = "";
+			} catch (error) {
+				$("wake-note").textContent = error.message;
+			}
+			renderWake();
+		};
+		$("wake-try").addEventListener("click", () => {
+			const candidate = $("wake-new").value.trim();
+			if (candidate) {
+				propose(candidate);
+			}
+		});
+		$("wake-cancel").addEventListener("click", () => propose(""));
+	};
+
 	const renderFace = () => {
 		const known = data.enrolled.includes(person);
 		$("face-state").textContent = known
@@ -416,6 +467,7 @@
 		renderQuiet();
 		renderParts();
 		renderVoice();
+		renderWake();
 		renderFace();
 		photos = { count: 0, picking: false, note: "" };
 		renderPhotos();
@@ -518,6 +570,15 @@
 			const fresh = await request("/state");
 			data.now = fresh.now;
 			data.enrolled = fresh.enrolled;
+			// A wake phrase on trial takes over when the mirror hears it. Show that
+			// without touching anything the person may be changing.
+			if (fresh.mirror && data.mirror && (fresh.mirror.wakePhrase !== data.mirror.wakePhrase || fresh.mirror.wakeCandidate !== data.mirror.wakeCandidate)) {
+				const tookOver = Boolean(data.mirror.wakeCandidate) && fresh.mirror.wakePhrase === data.mirror.wakeCandidate;
+				data.mirror.wakePhrase = fresh.mirror.wakePhrase;
+				data.mirror.wakeCandidate = fresh.mirror.wakeCandidate;
+				$("wake-note").textContent = tookOver ? `The mirror heard you. "${fresh.mirror.wakePhrase}" is the wake phrase now.` : "";
+				renderWake();
+			}
 			$("live").textContent = describeLive(data.now);
 			renderFace();
 		} catch {
@@ -575,6 +636,7 @@
 		});
 		bindQuiet();
 		bindVoice();
+		bindWake();
 		bindEnroll();
 		bindPhotos();
 		render();

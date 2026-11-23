@@ -84,7 +84,18 @@ const defaultProfile = (featureKeys, blocks) => ({
 	speech: { ...DEFAULT_SPEECH }
 });
 
+// A wake phrase is one to three plain words. wake-phrase.js has the full story.
+const PHRASE_PATTERN = /^[a-z]{2,16}( [a-z]{2,16}){0,2}$/;
+// A name is short, visible text: no angle brackets and no control characters.
+const validName = (name) => typeof name === "string" && name.trim().length >= 1 && name.length <= 24 && [...name].every((char) => char !== "<" && char !== ">" && char.codePointAt(0) >= 32);
+
 const defaultMirror = () => ({
+	// What people call the mirror, shown on the settings page.
+	name: "Mirror",
+	// The words before every spoken command, and a new phrase that is being
+	// tried out beside it. The candidate takes over once the mirror hears it.
+	wakePhrase: "mirror",
+	wakeCandidate: "",
 	// The voice for guests and for anyone who has not chosen one. "" is the
 	// voice named in MMM-Speak's config.
 	voice: "",
@@ -123,6 +134,15 @@ const normalizeMirror = (input) => {
 	if (knownVoice(source.voice)) {
 		mirror.voice = source.voice;
 	}
+	if (validName(source.name)) {
+		mirror.name = source.name.trim();
+	}
+	if (typeof source.wakePhrase === "string" && PHRASE_PATTERN.test(source.wakePhrase)) {
+		mirror.wakePhrase = source.wakePhrase;
+	}
+	if (typeof source.wakeCandidate === "string" && PHRASE_PATTERN.test(source.wakeCandidate) && source.wakeCandidate !== mirror.wakePhrase) {
+		mirror.wakeCandidate = source.wakeCandidate;
+	}
 	if (Array.isArray(source.blocks)) {
 		const blocks = mirror.blocks.map((block) => {
 			const stored = source.blocks.find((entry) => entry && entry.key === block.key);
@@ -147,6 +167,12 @@ const problemWithMirror = (input, voiceIds) => {
 	}
 	if (input.voice !== undefined && !knownVoice(input.voice, voiceIds)) {
 		return "voice must be one of the voices on offer";
+	}
+	if (input.name !== undefined && !validName(input.name)) {
+		return "name must be 1 to 24 characters";
+	}
+	if (input.wakeCandidate !== undefined && input.wakeCandidate !== "" && !(typeof input.wakeCandidate === "string" && PHRASE_PATTERN.test(input.wakeCandidate))) {
+		return "A wake phrase is one to three plain words of letters only";
 	}
 	const quiet = input.quietHours;
 	if (!quiet || typeof quiet !== "object" || typeof quiet.enabled !== "boolean") {

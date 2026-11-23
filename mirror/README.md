@@ -128,6 +128,19 @@ Test a recording without the microphone (16 kHz, 16-bit, mono WAV):
 ~/mirror-data/venv/bin/python ~/MagicMirror/mirror/services/voice.py --commands commands.json --wav phrase.wav
 ```
 
+## The mirror's name and wake phrase
+
+The Mirror tab of the settings page has the mirror's name, shown as the page's title, and the wake phrase, the words said before every command. Both are stored with the mirror's other settings.
+
+A wake phrase is one to three plain words. The recognizer has a fixed vocabulary, so a phrase works only when the speech model knows every word in it. A new phrase therefore goes through two steps:
+
+1. **The words are checked.** The mirror asks the speech model (`voice.py --check-words`) and refuses a phrase with a word it does not know, naming the word.
+2. **The phrase goes on trial.** The mirror listens for the old phrase and the new one. The first time it hears a command that starts with the new phrase, the new one takes over. Until then the old one keeps working, and "Stop trying it" drops the candidate.
+
+A phrase that is mistyped, or that the microphone cannot pick up, therefore never replaces the one that works. To get back to "mirror", propose it like any other phrase and say it once.
+
+`MMM-Household` broadcasts `HOUSEHOLD_MIRROR { name, wakePhrase, wakeCandidate }`, and `MMM-Voice` rebuilds its command list for both phrases while the recognizer keeps running.
+
 ## Spoken answers and special days
 
 `MMM-Briefing` answers the last three commands above through `MMM-Speak`. It builds its sentences from what other modules broadcast: `WEATHER_UPDATED` from the weather module, `CALENDAR_EVENTS` from each `MMM-GoogleCalendar` instance (`broadcastEvents` is on) and `HOUSEHOLD_TASKS` from each `MMM-HouseholdTasks` instance. It reads only the calendars and task lists of the person the mirror recognizes, matched by the person name in each module's `classes`. With nobody recognized it gives the weather and keeps the calendar to itself.

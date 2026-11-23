@@ -10,7 +10,7 @@
   <body>
     <main>
       <header>
-        <h1>Mirror</h1>
+        <h1 id="mirror-title">Mirror</h1>
         <p id="live" class="live">Connecting to the mirror</p>
       </header>
 
@@ -111,6 +111,16 @@
             <label>From <input id="quiet-from" type="time" /></label>
             <label>To <input id="quiet-to" type="time" /></label>
           </div>
+        </section>
+
+        <section aria-labelledby="name-title">
+          <h2 id="name-title">Name and wake phrase</h2>
+          <label class="row">Name <input id="mirror-name" type="text" maxlength="24" autocomplete="off" /></label>
+          <p id="wake-current" class="hint"></p>
+          <label class="row">New wake phrase <input id="wake-new" type="text" maxlength="50" autocomplete="off" autocapitalize="none" spellcheck="false" /></label>
+          <button id="wake-try" type="button">Try this phrase</button>
+          <button id="wake-cancel" type="button" hidden>Stop trying it</button>
+          <p id="wake-note" class="hint" role="status"></p>
         </section>
 
         <section id="mirror-voice-section" aria-labelledby="mirror-voice-title" hidden>
