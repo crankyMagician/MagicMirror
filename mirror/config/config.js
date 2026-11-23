@@ -146,17 +146,24 @@ const config = {
 			module: "MMM-Voice",
 			config: {
 				// Command -> the phrases that trigger it, after the wake word.
-				// MMM-Household acts on the first two and MMM-Briefing answers
+				// MMM-Household acts on the first three and MMM-Briefing answers
 				// the rest aloud.
 				commands: {
 					wake_up: ["wake up"],
 					good_night: ["good night"],
+					// Ends "show only NAME" before its minute is up.
+					show_all: ["go back", "show everything"],
 					good_morning: ["good morning"],
 					weather: ["what is the weather", "how is the weather"],
 					what_is_next: ["what is next", "what is on my calendar"]
 				},
-				// Spoken name -> feature, for "show NAME" and "hide NAME".
+				// Spoken name -> feature, for "show NAME", "hide NAME" and
+				// "show only NAME", which puts that one alone on the screen.
 				features: {
+					clock: "clock",
+					network: "unifi",
+					"pokemon go": "MMM-PokemonGOEvents",
+					"days together": "MMM-CoupleDays",
 					calendar: "calendar",
 					"work calendar": "work-calendar",
 					tasks: "tasks",

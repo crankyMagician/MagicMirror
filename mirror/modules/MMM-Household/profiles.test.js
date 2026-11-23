@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
-const { DEFAULT_BLOCKS, ProfileStore, currentBlock, defaultMirror, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor } = require("./profiles");
+const { DEFAULT_BLOCKS, ProfileStore, canFocus, currentBlock, defaultMirror, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor } = require("./profiles");
 
 const at = (time) => {
 	const [hours, minutes] = time.split(":").map(Number);
@@ -313,4 +313,29 @@ test("the mirror keeps a valid screen direction and drops anything else", () => 
 	const good = defaultMirror();
 	assert.equal(problemWithMirror({ ...good, rotation: "normal" }), null);
 	assert.match(problemWithMirror({ ...good, rotation: "output * disable" }), /rotation must be one of/);
+});
+
+test("show only: the view names the one feature for a person or a woken guest, and for nobody else", () => {
+	const noon = new Date(2026, 10, 23, 12, 0);
+	const forSam = viewFor({ person: "sam", profile: null, blocks: DEFAULT_BLOCKS, focus: "calendar" }, noon);
+	assert.equal(forSam.focus, "calendar");
+	const guest = viewFor({ person: null, profile: null, blocks: DEFAULT_BLOCKS, wakeUntil: noon.getTime() + 60000, focus: "weather" }, noon);
+	assert.equal(guest.person, "guest");
+	assert.equal(guest.focus, "weather");
+	const nobody = viewFor({ person: null, profile: null, blocks: DEFAULT_BLOCKS, focus: "weather" }, noon);
+	assert.equal(nobody.focus, undefined);
+	const asleep = viewFor({ person: "sam", profile: null, blocks: DEFAULT_BLOCKS, asleep: "sam", focus: "calendar" }, noon);
+	assert.equal(asleep.focus, undefined);
+	assert.equal(viewFor({ person: "sam", profile: null, blocks: DEFAULT_BLOCKS }, noon).focus, undefined);
+});
+
+test("show only is for shared features and a person's own", () => {
+	const features = [{ key: "weather", label: "Weather now", owners: [] }, { key: "art", label: "Art", owners: ["heather"] }, { key: "calendar", label: "Calendar", owners: ["sam", "heather"] }];
+	assert.equal(canFocus(features, "weather", "sam"), true);
+	assert.equal(canFocus(features, "weather", null), true);
+	assert.equal(canFocus(features, "art", "heather"), true);
+	assert.equal(canFocus(features, "art", "sam"), false);
+	assert.equal(canFocus(features, "calendar", null), false);
+	assert.equal(canFocus(features, "moon", "sam"), false);
+	assert.equal(canFocus(undefined, "weather", "sam"), false);
 });

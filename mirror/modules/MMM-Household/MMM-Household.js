@@ -39,6 +39,10 @@ Module.register("MMM-Household", {
 		pinned: ["clock", "weather", "calendar"],
 		// Seconds before a full column gives its waiting modules a turn.
 		turnSeconds: 40,
+		// Seconds a feature stays alone on the screen after "show only".
+		focusSeconds: 60,
+		// The most a feature shown alone is enlarged.
+		focusScale: 1.8,
 		// Names for features on the settings page, by feature key. They add to
 		// and override the built-in names below. A feature without a name uses
 		// the module's header, then its key.
@@ -108,6 +112,9 @@ Module.register("MMM-Household", {
 			this.sendNotification("HOUSEHOLD_PRESENCE", payload);
 		} else if (notification === "ALERT") {
 			this.sendNotification("SHOW_ALERT", payload);
+		} else if (notification === "SAY") {
+			// Something the helper wants said, in the voice of whoever is there.
+			this.sendNotification("TTS_SAY", payload);
 		} else if (notification === "MIRROR") {
 			// The mirror's name and the phrases to listen for. MMM-Voice acts on it.
 			this.sendNotification("HOUSEHOLD_MIRROR", payload);
@@ -173,6 +180,10 @@ Module.register("MMM-Household", {
 		if (owners.length > 0 && (person === null || !owners.includes(person))) {
 			return false;
 		}
+		// "Show only X": that feature and nothing else, whatever the switches say.
+		if (this.view.focus) {
+			return this.featureKeyOf(module) === this.view.focus;
+		}
 		// A person's own switches apply to shared modules as well.
 		if (this.view.features && this.view.features[this.featureKeyOf(module)] === false) {
 			return false;
@@ -189,6 +200,10 @@ Module.register("MMM-Household", {
 	 */
 	packColumns (advance) {
 		const waiting = new Set();
+		if (this.view.focus) {
+			// One feature alone needs no turns.
+			return waiting;
+		}
 		for (const position of this.config.columns) {
 			const region = document.querySelector(`.region.${position.replace("_", ".")}`);
 			if (!region || region.clientHeight === 0) {
@@ -256,6 +271,55 @@ Module.register("MMM-Household", {
 	},
 
 	/**
+	 * Moves a feature that is shown alone to the middle of the screen and
+	 * enlarges it, and puts every other module back where it belongs. The
+	 * place a module has in the page's flow is not changed by the move, so it
+	 * can be measured again at any time.
+	 */
+	placeFocus () {
+		const focus = this.view.focus || null;
+		document.body.classList.toggle("household-focus", Boolean(focus));
+		const page = document.body.getBoundingClientRect();
+		const screen = { width: window.innerWidth, height: window.innerHeight };
+		const chosen = [];
+		// MagicMirror sets a fade on each module's own style when it shows or
+		// hides it, so the glide to the middle has to be set there as well.
+		const glide = `opacity ${this.config.fadeSpeed / 1000}s, transform ${this.config.fadeSpeed / 1000}s ease`;
+		MM.getModules().enumerate((module) => {
+			const wrapper = document.getElementById(module.identifier);
+			if (!wrapper || !this.isManaged(module)) {
+				return;
+			}
+			if (focus && this.isVisible(module)) {
+				chosen.push(wrapper);
+			} else if (wrapper.classList.contains("household-focused")) {
+				wrapper.classList.remove("household-focused");
+				wrapper.style.transition = glide;
+				wrapper.style.transform = "";
+			}
+		});
+		if (chosen.length === 0) {
+			return;
+		}
+		// Several modules can share a feature. They move as one block.
+		const boxes = chosen.map((wrapper) => ({ left: page.left + wrapper.offsetLeft, top: page.top + wrapper.offsetTop, width: wrapper.offsetWidth, height: wrapper.offsetHeight }));
+		const left = Math.min(...boxes.map((box) => box.left));
+		const top = Math.min(...boxes.map((box) => box.top));
+		const block = { left, top, width: Math.max(...boxes.map((box) => box.left + box.width)) - left, height: Math.max(...boxes.map((box) => box.top + box.height)) - top };
+		const move = HouseholdFit.center(block, screen, { maxScale: this.config.focusScale });
+		chosen.forEach((wrapper, index) => {
+			// Each module scales around the block's center, so they stay together.
+			const box = boxes[index];
+			const originX = block.left + block.width / 2 - box.left;
+			const originY = block.top + block.height / 2 - box.top;
+			wrapper.classList.add("household-focused");
+			wrapper.style.transition = glide;
+			wrapper.style.transformOrigin = `${originX}px ${originY}px`;
+			wrapper.style.transform = `translate(${move.x}px, ${move.y}px) scale(${move.scale})`;
+		});
+	},
+
+	/**
 	 * Shows and hides modules. A module can be held back for two reasons, each
 	 * with a lock of its own: the view (it is not for this person, or they
 	 * switched it off) and the fit (its column is full and it waits its turn).
@@ -290,6 +354,8 @@ Module.register("MMM-Household", {
 				module.show(speed, { lockString: fitLock });
 			}
 		});
+
+		this.placeFocus();
 
 		const body = document.body;
 		document.documentElement.dataset.theme = this.view.theme === "light" ? "light" : "dark";
