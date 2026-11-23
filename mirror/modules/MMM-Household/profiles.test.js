@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
-const { DEFAULT_BLOCKS, ProfileStore, currentBlock, inRange, normalize, problemWith, viewFor } = require("./profiles");
+const { DEFAULT_BLOCKS, ProfileStore, currentBlock, defaultMirror, inRange, normalize, normalizeMirror, problemWith, problemWithMirror, viewFor } = require("./profiles");
 
 const at = (time) => {
 	const [hours, minutes] = time.split(":").map(Number);
@@ -46,7 +46,7 @@ test("normalize turns everything on for a new person", () => {
 	const profile = normalize(undefined, FEATURES, DEFAULT_BLOCKS);
 	assert.deepEqual(Object.keys(profile.blocks), ["morning", "day", "evening", "night"]);
 	assert.equal(profile.blocks.night.newsfeed, true);
-	assert.equal(profile.quietHours.enabled, false);
+	assert.equal("quietHours" in profile, false);
 });
 
 test("normalize keeps stored choices and drops what it does not know", () => {
@@ -56,7 +56,8 @@ test("normalize keeps stored choices and drops what it does not know", () => {
 	assert.equal(profile.blocks.night.clock, true);
 	assert.equal("removed" in profile.blocks.night, false);
 	assert.equal("brunch" in profile.blocks, false);
-	assert.deepEqual(profile.quietHours, { enabled: true, from: "22:30", to: "06:00" });
+	// Quiet hours belong to the mirror now, so a stored set is dropped from the person.
+	assert.equal("quietHours" in profile, false);
 });
 
 test("problemWith accepts a complete profile", () => {
@@ -67,7 +68,8 @@ test("problemWith refuses unknown names and wrong types", () => {
 	assert.match(problemWith({ blocks: { brunch: {} } }, FEATURES, DEFAULT_BLOCKS), /Unknown block/);
 	assert.match(problemWith({ blocks: { day: { stocks: true } } }, FEATURES, DEFAULT_BLOCKS), /Unknown feature/);
 	assert.match(problemWith({ blocks: { day: { clock: "yes" } } }, FEATURES, DEFAULT_BLOCKS), /true or false/);
-	assert.match(problemWith({ blocks: {}, quietHours: { enabled: true, from: "25:00", to: "06:00" } }, FEATURES, DEFAULT_BLOCKS), /must be a time/);
+	// A page from before quiet hours moved to the mirror still sends them. That is not an error.
+	assert.equal(problemWith({ blocks: {}, quietHours: { enabled: true, from: "25:00", to: "06:00" } }, FEATURES, DEFAULT_BLOCKS), null);
 	assert.match(problemWith([], FEATURES, DEFAULT_BLOCKS), /must be an object/);
 });
 
@@ -95,19 +97,27 @@ test("viewFor gives a person their switches for the block", () => {
 	assert.equal(view.features.clock, true);
 });
 
-test("viewFor treats a person in quiet hours as absent", () => {
-	const quiet = profileOf({ quietHours: { enabled: true, from: "23:00", to: "06:00" } });
-	const view = viewFor(state({ profile: quiet }), at("23:30"));
+const QUIET = { enabled: true, from: "23:00", to: "06:00" };
+
+test("viewFor treats everyone as absent in the mirror's quiet hours", () => {
+	const view = viewFor(state({ quietHours: QUIET }), at("23:30"));
 	assert.equal(view.person, null);
 	assert.equal(view.quiet, true);
+	const guest = viewFor({ person: "guest", unknown: false, profile: null, blocks: DEFAULT_BLOCKS, quietHours: QUIET }, at("23:30"));
+	assert.equal(guest.person, null);
+	assert.equal(guest.quiet, true);
+	// Outside the hours, and with the switch off, people are seen as usual.
+	assert.equal(viewFor(state({ quietHours: QUIET }), at("12:00")).person, "heather");
+	assert.equal(viewFor(state({ quietHours: { ...QUIET, enabled: false } }), at("23:30")).person, "heather");
 });
 
 test("a spoken wake up overrides quiet hours", () => {
-	const quiet = profileOf({ quietHours: { enabled: true, from: "23:00", to: "06:00" } });
 	const now = at("23:30");
-	const view = viewFor(state({ profile: quiet, wakeUntil: now.getTime() + 60000 }), now);
+	const view = viewFor(state({ quietHours: QUIET, wakeUntil: now.getTime() + 60000 }), now);
 	assert.equal(view.person, "heather");
 	assert.equal(view.quiet, false);
+	const nobody = viewFor({ person: null, unknown: false, profile: null, blocks: DEFAULT_BLOCKS, quietHours: QUIET, wakeUntil: now.getTime() + 60000 }, now);
+	assert.equal(nobody.person, "guest");
 });
 
 test("a spoken wake up with nobody recognized shows the guest view, then expires", () => {
@@ -146,9 +156,80 @@ test("themes default to dark and migrate without changing schedules", () => {
 });
 
 test("themes follow the recognized person and return to dark in quiet hours or for a guest", () => {
-	const profile = normalize({ theme: "light", quietHours: { enabled: true, from: "23:00", to: "06:00" } }, FEATURES, DEFAULT_BLOCKS);
-	assert.equal(viewFor({ person: "heather", profile, blocks: DEFAULT_BLOCKS }, at("12:00")).theme, "light");
-	assert.equal(viewFor({ person: "heather", profile, blocks: DEFAULT_BLOCKS }, at("23:30")).theme, "dark");
+	const profile = normalize({ theme: "light" }, FEATURES, DEFAULT_BLOCKS);
+	assert.equal(viewFor({ person: "heather", profile, blocks: DEFAULT_BLOCKS, quietHours: QUIET }, at("12:00")).theme, "light");
+	assert.equal(viewFor({ person: "heather", profile, blocks: DEFAULT_BLOCKS, quietHours: QUIET }, at("23:30")).theme, "dark");
 	assert.equal(viewFor({ person: "guest", profile: null, blocks: DEFAULT_BLOCKS }, at("12:00")).theme, "dark");
 	assert.equal(viewFor({ person: "sam", profile: normalize({}, FEATURES, DEFAULT_BLOCKS), blocks: DEFAULT_BLOCKS }, at("12:00")).theme, "dark");
+});
+
+const blocksAt = (...times) => DEFAULT_BLOCKS.map((block, index) => ({ key: block.key, from: times[index] }));
+
+test("the mirror starts with quiet hours off and the usual parts of the day", () => {
+	const mirror = defaultMirror();
+	assert.equal(mirror.quietHours.enabled, false);
+	assert.deepEqual(mirror.blocks, DEFAULT_BLOCKS);
+	assert.equal(problemWithMirror(mirror), null);
+	assert.deepEqual(normalizeMirror(undefined), mirror);
+});
+
+test("normalizeMirror keeps valid times and labels, and drops a set that is out of order", () => {
+	const moved = normalizeMirror({ quietHours: { enabled: true, from: "22:00", to: "nonsense" }, blocks: blocksAt("06:30", "12:00", "18:00", "21:30") });
+	assert.deepEqual(moved.quietHours, { enabled: true, from: "22:00", to: "06:00" });
+	assert.deepEqual(moved.blocks.map((block) => block.from), ["06:30", "12:00", "18:00", "21:30"]);
+	assert.deepEqual(moved.blocks.map((block) => block.label), ["Morning", "Day", "Evening", "Night"]);
+	assert.equal(currentBlock(moved.blocks, at("06:00")).key, "night");
+	assert.equal(currentBlock(moved.blocks, at("21:45")).key, "night");
+	const jumbled = normalizeMirror({ blocks: blocksAt("12:00", "06:30", "18:00", "21:30") });
+	assert.deepEqual(jumbled.blocks, DEFAULT_BLOCKS);
+	const partial = normalizeMirror({ blocks: [{ key: "day", from: "12:30" }, { key: "brunch", from: "10:00" }, { key: "night", from: "9pm" }] });
+	assert.deepEqual(partial.blocks.map((block) => block.from), ["05:00", "12:30", "17:00", "22:00"]);
+});
+
+test("problemWithMirror refuses bad times, a wrong list and times out of order", () => {
+	const good = { quietHours: { enabled: false, from: "23:00", to: "06:00" }, blocks: blocksAt("05:00", "11:00", "17:00", "22:00") };
+	assert.equal(problemWithMirror(good), null);
+	assert.match(problemWithMirror([]), /must be an object/);
+	assert.match(problemWithMirror({ ...good, quietHours: { from: "23:00", to: "06:00" } }), /enabled/);
+	assert.match(problemWithMirror({ ...good, quietHours: { enabled: true, from: "25:00", to: "06:00" } }), /must be a time/);
+	assert.match(problemWithMirror({ ...good, blocks: good.blocks.slice(0, 3) }), /4 parts of the day/);
+	assert.match(problemWithMirror({ ...good, blocks: [...good.blocks].reverse() }), /in that order/);
+	assert.match(problemWithMirror({ ...good, blocks: blocksAt("05:00", "11:00", "noon", "22:00") }), /Evening needs a start time/);
+	assert.match(problemWithMirror({ ...good, blocks: blocksAt("05:00", "11:00", "11:00", "22:00") }), /after the one before/);
+});
+
+test("ProfileStore reads a version 1 file and moves switched-on quiet hours to the mirror", () => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "household-"));
+	const file = path.join(directory, "profiles.json");
+	const old = {
+		version: 1,
+		people: {
+			sam: { theme: "light", blocks: { day: { clock: false } }, quietHours: { enabled: false, from: "21:00", to: "05:00" } },
+			heather: { blocks: {}, quietHours: { enabled: true, from: "22:30", to: "06:30" } }
+		}
+	};
+	fs.writeFileSync(file, JSON.stringify(old));
+	const store = new ProfileStore(file);
+	assert.deepEqual(store.getMirror().quietHours, { enabled: true, from: "22:30", to: "06:30" });
+	assert.deepEqual(store.getMirror().blocks, DEFAULT_BLOCKS);
+	assert.equal(store.get("sam", FEATURES, DEFAULT_BLOCKS).theme, "light");
+	assert.equal(store.get("sam", FEATURES, DEFAULT_BLOCKS).blocks.day.clock, false);
+
+	// Saving writes version 2, and the mirror's settings survive a reload.
+	store.setMirror({ quietHours: { enabled: true, from: "23:15", to: "06:00" }, blocks: blocksAt("06:00", "11:00", "17:00", "22:00") });
+	const written = JSON.parse(fs.readFileSync(file, "utf8"));
+	assert.equal(written.version, 2);
+	const reloaded = new ProfileStore(file);
+	assert.equal(reloaded.getMirror().quietHours.from, "23:15");
+	assert.equal(reloaded.getMirror().blocks[0].from, "06:00");
+	assert.equal(reloaded.get("sam", FEATURES, DEFAULT_BLOCKS).theme, "light");
+	fs.rmSync(directory, { recursive: true });
+});
+
+test("a version 1 file with no quiet hours switched on leaves the mirror's off", () => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "household-"));
+	const file = path.join(directory, "profiles.json");
+	fs.writeFileSync(file, JSON.stringify({ version: 1, people: { heather: { blocks: {}, quietHours: { enabled: false, from: "23:00", to: "06:00" } } } }));
+	assert.equal(new ProfileStore(file).getMirror().quietHours.enabled, false);
+	fs.rmSync(directory, { recursive: true });
 });

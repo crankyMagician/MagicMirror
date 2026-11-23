@@ -6,6 +6,10 @@
 
 	let data = null;
 	let person = null;
+	// The page shows one person's settings or the mirror's own.
+	let showMirror = false;
+	let mirrorTimer = null;
+	let mirrorRevision = 0;
 	const saveTimers = new Map();
 	const revisions = new Map();
 
@@ -86,13 +90,35 @@
 		}, 400));
 	};
 
+	// Settings that belong to the mirror are saved together, a moment after
+	// the last change.
+	const saveMirror = () => {
+		clearTimeout(mirrorTimer);
+		const mirror = structuredClone(data.mirror);
+		mirrorRevision += 1;
+		const revision = mirrorRevision;
+		mirrorTimer = setTimeout(async () => {
+			try {
+				const saved = await send("PUT", "/mirror", mirror);
+				if (mirrorRevision === revision) {
+					data.mirror = saved.mirror;
+					data.blocks = saved.mirror.blocks;
+				}
+				showSaved("Saved");
+			} catch (error) {
+				showSaved(`Not saved: ${error.message}`, true);
+			}
+		}, 400);
+	};
+
 	const renderPeople = () => {
 		const nav = $("people");
 		nav.replaceChildren();
 		data.people.forEach((name) => {
 			const button = el("button", { type: "button", textContent: capitalize(name) });
-			button.setAttribute("aria-pressed", String(name === person));
+			button.setAttribute("aria-pressed", String(!showMirror && name === person));
 			button.addEventListener("click", () => {
+				showMirror = false;
 				person = name;
 				try {
 					localStorage.setItem(PERSON_KEY, name);
@@ -103,6 +129,13 @@
 			});
 			nav.append(button);
 		});
+		const mirror = el("button", { type: "button", textContent: "Mirror" });
+		mirror.setAttribute("aria-pressed", String(showMirror));
+		mirror.addEventListener("click", () => {
+			showMirror = true;
+			render();
+		});
+		nav.append(mirror);
 	};
 
 	const renderGrid = () => {
@@ -137,12 +170,27 @@
 	};
 
 	const renderQuiet = () => {
-		const quiet = data.profiles[person].quietHours;
+		const quiet = data.mirror.quietHours;
 		$("quiet-enabled").checked = quiet.enabled;
 		$("quiet-from").value = quiet.from;
 		$("quiet-to").value = quiet.to;
 		$("quiet-from").disabled = !quiet.enabled;
 		$("quiet-to").disabled = !quiet.enabled;
+	};
+
+	// One time field per part of the day.
+	const renderParts = () => {
+		const rows = data.mirror.blocks.map((block) => {
+			const input = el("input", { type: "time", value: block.from });
+			input.addEventListener("change", () => {
+				if (input.value) {
+					block.from = input.value;
+					saveMirror();
+				}
+			});
+			return el("label", { className: "row" }, [el("span", { textContent: `${block.label} starts at` }), input]);
+		});
+		$("parts").replaceChildren(...rows);
 	};
 
 	const renderFace = () => {
@@ -217,8 +265,11 @@
 		$("live").textContent = describeLive(data.now);
 		renderAppearance();
 		renderPeople();
+		$("person-view").hidden = showMirror;
+		$("mirror-view").hidden = !showMirror;
 		renderGrid();
 		renderQuiet();
+		renderParts();
 		renderFace();
 		photos = { count: 0, picking: false, note: "" };
 		renderPhotos();
@@ -237,15 +288,15 @@
 
 	const bindQuiet = () => {
 		$("quiet-enabled").addEventListener("change", (event) => {
-			data.profiles[person].quietHours.enabled = event.target.checked;
+			data.mirror.quietHours.enabled = event.target.checked;
 			renderQuiet();
-			save();
+			saveMirror();
 		});
 		["from", "to"].forEach((end) => {
 			$(`quiet-${end}`).addEventListener("change", (event) => {
 				if (event.target.value) {
-					data.profiles[person].quietHours[end] = event.target.value;
-					save();
+					data.mirror.quietHours[end] = event.target.value;
+					saveMirror();
 				}
 			});
 		});

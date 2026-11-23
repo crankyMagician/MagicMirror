@@ -6,7 +6,7 @@ const readline = require("node:readline");
 const express = require("express");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const { DEFAULT_BLOCKS, ProfileStore, problemWith, viewFor } = require("./profiles");
+const { ProfileStore, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
 const { addUniFiRoutes } = require("./unifi-routes");
 const { addPhotoRoutes } = require("./photos-routes");
 const { addArtRoutes } = require("./art-feed");
@@ -26,8 +26,10 @@ module.exports = NodeHelper.create({
 		this.unknown = false;
 		this.enrolled = [];
 		this.features = [];
-		this.blocks = DEFAULT_BLOCKS;
 		this.store = new ProfileStore(PROFILES_FILE);
+		// The parts of the day and quiet hours belong to the mirror, not to a person.
+		this.mirror = this.store.getMirror();
+		this.blocks = this.mirror.blocks;
 		this.lastView = "";
 		// Set by voice commands. They last until the person leaves.
 		this.wakeUntil = 0;
@@ -122,6 +124,7 @@ module.exports = NodeHelper.create({
 				people: this.config.people,
 				enrolled: this.enrolled,
 				blocks: this.blocks,
+				mirror: this.mirror,
 				features: this.features,
 				profiles: Object.fromEntries(this.config.people.map((name) => [name, this.profileOf(name)])),
 				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, theme: view.theme, screenOn: this.screenOn, camera: this.presence !== null }
@@ -140,7 +143,8 @@ module.exports = NodeHelper.create({
 				return;
 			}
 			try {
-				this.store.set(name, { ...req.body, theme: req.body.theme ?? this.profileOf(name).theme });
+				// Store only what a profile holds, so fields from an older page are dropped.
+				this.store.set(name, normalize({ ...req.body, theme: req.body.theme ?? this.profileOf(name).theme }, this.featureKeysFor(name), this.blocks));
 			} catch (error) {
 				Log.error(`Could not save the profile of ${name}: ${error.message}`);
 				res.status(500).json({ error: "The mirror could not save that" });
@@ -149,6 +153,26 @@ module.exports = NodeHelper.create({
 			Log.log(`Saved the profile of ${name}`);
 			this.refresh();
 			res.json({ profile: this.profileOf(name) });
+		});
+
+		app.put("/api/mirror", jsonOnly, json, (req, res) => {
+			const problem = problemWithMirror(req.body);
+			if (problem) {
+				res.status(400).json({ error: problem });
+				return;
+			}
+			try {
+				this.store.setMirror(req.body);
+			} catch (error) {
+				Log.error(`Could not save the mirror settings: ${error.message}`);
+				res.status(500).json({ error: "The mirror could not save that" });
+				return;
+			}
+			this.mirror = this.store.getMirror();
+			this.blocks = this.mirror.blocks;
+			Log.log("Saved the mirror settings");
+			this.refresh();
+			res.json({ mirror: this.mirror });
 		});
 
 		app.post("/api/enroll", jsonOnly, json, (req, res) => {
@@ -262,6 +286,7 @@ module.exports = NodeHelper.create({
 			unknown: this.unknown,
 			profile: hasProfile ? this.profileOf(this.person) : null,
 			blocks: this.blocks,
+			quietHours: this.mirror.quietHours,
 			wakeUntil: this.wakeUntil,
 			asleep: this.asleep,
 			overrides: this.overrides
