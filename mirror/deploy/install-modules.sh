@@ -30,6 +30,8 @@ while read -r name url commit install; do
 	if [ ! -d "$dir/.git" ]; then
 		git "${git_options[@]}" clone --quiet "$url" "$dir"
 	fi
+	# A module can move to another repository, for example to our fork.
+	git -C "$dir" remote set-url origin "$url"
 	if [ "$(git -C "$dir" rev-parse HEAD)" != "$commit" ]; then
 		git -C "$dir" cat-file -e "$commit^{commit}" 2>/dev/null || git "${git_options[@]}" -C "$dir" fetch --quiet origin
 		git -C "$dir" checkout --quiet --detach "$commit"
