@@ -7,10 +7,13 @@
  * starts with SECRET_ from the copy of this config it sends to the browser.
  */
 let config = {
-	address: "localhost",
+	// The mirror listens on the home network so phones can open the settings
+	// page at http://mirror.local:8080/household. The whitelist limits that to
+	// the two home subnets.
+	address: "0.0.0.0",
 	port: 8080,
 	basePath: "/",
-	ipWhitelist: ["127.0.0.1", "::ffff:127.0.0.1", "::1"],
+	ipWhitelist: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
 
 	language: "en",
 	locale: "en-US",
@@ -76,6 +79,8 @@ let config = {
 		},
 		{
 			module: "weather",
+			// Lists the forecast separately from the current weather on the settings page.
+			classes: "feature-forecast",
 			position: "top_right",
 			header: "Forecast",
 			config: {

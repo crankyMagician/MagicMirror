@@ -3,43 +3,41 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline");
+const express = require("express");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
+const { DEFAULT_BLOCKS, ProfileStore, currentBlock, inRange, problemWith } = require("./profiles");
 
 const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-data");
 const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
-const NAME_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
+const PROFILES_FILE = path.join(DATA_DIR, "profiles.json");
 
 module.exports = NodeHelper.create({
 	start () {
 		this.config = null;
 		this.presence = null;
 		this.person = null;
-		this.people = [];
+		this.unknown = false;
+		this.enrolled = [];
+		this.features = [];
+		this.blocks = DEFAULT_BLOCKS;
+		this.store = new ProfileStore(PROFILES_FILE);
+		this.lastView = "";
 		this.screenOn = true;
 		this.offTimer = null;
 		this.restartDelay = 2000;
 		this.stopping = false;
 
-		this.expressApp.get("/household/api/status", (req, res) => {
-			res.json({ person: this.person, people: this.people, screenOn: this.screenOn, running: this.presence !== null });
-		});
-		this.expressApp.post("/household/api/enroll", (req, res) => {
-			const name = String(req.query.name || "").toLowerCase();
-			if (!NAME_PATTERN.test(name)) {
-				res.status(400).json({ error: "Give a lowercase name, for example ?name=sam" });
-				return;
-			}
-			if (!this.sendCommand({ cmd: "enroll", name, samples: 20 })) {
-				res.status(503).json({ error: "The presence service is not running" });
-				return;
-			}
-			res.json({ enrolling: name });
-		});
+		// Quiet hours and the blocks of the day change with the clock, not with
+		// the camera, so the view is recomputed on a timer as well.
+		this.clock = setInterval(() => this.refresh(), 30000);
+
+		this.addRoutes();
 	},
 
 	stop () {
 		this.stopping = true;
+		clearInterval(this.clock);
 		this.cancelScreenOff();
 		if (this.presence) {
 			this.presence.kill();
@@ -48,18 +46,152 @@ module.exports = NodeHelper.create({
 		this.setScreen(true);
 	},
 
+	addRoutes () {
+		const app = this.expressApp;
+		const publicDir = path.join(fs.realpathSync(this.path), "public");
+		const json = express.json({ limit: "20kb" });
+		// A request that changes something must be JSON. A web page on another
+		// site cannot send that to the mirror without the browser asking first.
+		const jsonOnly = (req, res, next) => {
+			if (!req.is("application/json")) {
+				res.status(415).json({ error: "Send JSON with Content-Type: application/json" });
+				return;
+			}
+			next();
+		};
+
+		app.get("/household", (req, res) => res.sendFile(path.join(publicDir, "settings.html")));
+
+		app.get("/household/api/status", (req, res) => {
+			res.json({ person: this.person, people: this.enrolled, screenOn: this.screenOn, running: this.presence !== null });
+		});
+
+		app.get("/household/api/state", (req, res) => {
+			if (!this.config) {
+				res.status(503).json({ error: "The mirror is still starting" });
+				return;
+			}
+			const view = this.computeView(new Date());
+			res.json({
+				people: this.config.people,
+				enrolled: this.enrolled,
+				blocks: this.blocks,
+				features: this.features,
+				profiles: Object.fromEntries(this.config.people.map((name) => [name, this.profileOf(name)])),
+				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, screenOn: this.screenOn, camera: this.presence !== null }
+			});
+		});
+
+		app.put("/household/api/profiles/:name", jsonOnly, json, (req, res) => {
+			const name = req.params.name;
+			if (!this.config || !this.config.people.includes(name)) {
+				res.status(404).json({ error: "Nobody on this mirror has that name" });
+				return;
+			}
+			const problem = problemWith(req.body, this.featureKeysFor(name), this.blocks);
+			if (problem) {
+				res.status(400).json({ error: problem });
+				return;
+			}
+			try {
+				this.store.set(name, req.body);
+			} catch (error) {
+				Log.error(`Could not save the profile of ${name}: ${error.message}`);
+				res.status(500).json({ error: "The mirror could not save that" });
+				return;
+			}
+			Log.log(`Saved the profile of ${name}`);
+			this.refresh();
+			res.json({ profile: this.profileOf(name) });
+		});
+
+		app.post("/household/api/enroll", jsonOnly, json, (req, res) => {
+			const name = String((req.body && req.body.name) || "");
+			if (!this.config || !this.config.people.includes(name)) {
+				res.status(400).json({ error: "Give the name of someone on this mirror" });
+				return;
+			}
+			if (!this.sendCommand({ cmd: "enroll", name, samples: 20 })) {
+				res.status(503).json({ error: "The camera service is not running" });
+				return;
+			}
+			res.json({ enrolling: name });
+		});
+	},
+
 	socketNotificationReceived (notification, payload) {
-		if (notification !== "CONFIG") {
+		if (notification === "CONFIG") {
+			// The browser sends CONFIG again on every reload. Start the service
+			// once and answer a reload with the current state.
+			if (this.config === null) {
+				this.config = payload;
+				this.startPresence();
+				this.scheduleScreenOff();
+			}
+			this.lastView = "";
+			this.refresh();
+		} else if (notification === "FEATURES") {
+			this.features = payload;
+			this.lastView = "";
+			this.refresh();
+		}
+	},
+
+	/**
+	 * Lists the features one person can switch on and off: the shared ones and
+	 * their own.
+	 * @param {string} name a person on this mirror
+	 * @returns {string[]} feature keys
+	 */
+	featureKeysFor (name) {
+		return this.features.filter((feature) => feature.owners.length === 0 || feature.owners.includes(name)).map((feature) => feature.key);
+	},
+
+	profileOf (name) {
+		return this.store.get(name, this.featureKeysFor(name), this.blocks);
+	},
+
+	/**
+	 * Works out what the mirror should show right now.
+	 * @param {Date} now the current time
+	 * @returns {object} who the view is for, the block of the day and that person's feature switches
+	 */
+	computeView (now) {
+		const block = currentBlock(this.blocks, now).key;
+		const view = { person: this.person, unknown: this.unknown, quiet: false, block, features: null };
+		if (this.person && this.config && this.config.people.includes(this.person)) {
+			const profile = this.profileOf(this.person);
+			const quiet = profile.quietHours;
+			if (quiet.enabled && inRange(quiet.from, quiet.to, now)) {
+				// In quiet hours the mirror treats the person as absent.
+				view.person = null;
+				view.quiet = true;
+			} else {
+				view.features = profile.blocks[block];
+			}
+		}
+		return view;
+	},
+
+	/**
+	 * Recomputes the view, sends it to the browser when it changed and keeps
+	 * the screen in step with it.
+	 */
+	refresh () {
+		if (!this.config) {
 			return;
 		}
-		// The browser sends CONFIG again on every reload. Start the service once
-		// and answer a reload with the current state.
-		if (this.config === null) {
-			this.config = payload;
-			this.startPresence();
-			this.scheduleScreenOff();
+		const view = this.computeView(new Date());
+		const serialized = JSON.stringify(view);
+		if (serialized !== this.lastView) {
+			this.lastView = serialized;
+			this.sendSocketNotification("VIEW", view);
+		}
+		if (view.person) {
+			this.cancelScreenOff();
+			this.setScreen(true);
 		} else {
-			this.sendSocketNotification("PRESENCE", { person: this.person, unknown: false });
+			this.scheduleScreenOff();
 		}
 	},
 
@@ -110,7 +242,7 @@ module.exports = NodeHelper.create({
 		}
 		switch (message.type) {
 			case "ready":
-				this.people = message.people;
+				this.enrolled = message.people;
 				this.restartDelay = 2000;
 				Log.log(`Presence service ready. Enrolled: ${message.people.join(", ") || "nobody (any face counts as a guest)"}`);
 				break;
@@ -148,13 +280,8 @@ module.exports = NodeHelper.create({
 			Log.log(`Present: ${person || (unknown ? "an unknown face" : "nobody")}`);
 		}
 		this.person = person;
-		this.sendSocketNotification("PRESENCE", { person, unknown });
-		if (person) {
-			this.cancelScreenOff();
-			this.setScreen(true);
-		} else {
-			this.scheduleScreenOff();
-		}
+		this.unknown = Boolean(unknown);
+		this.refresh();
 	},
 
 	cancelScreenOff () {
@@ -169,7 +296,7 @@ module.exports = NodeHelper.create({
 		}
 		this.offTimer = setTimeout(() => {
 			this.offTimer = null;
-			if (!this.person && this.presence) {
+			if (this.presence && !this.computeView(new Date()).person) {
 				this.setScreen(false);
 			}
 		}, this.config.absentDelay * 1000);

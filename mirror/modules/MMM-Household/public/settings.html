@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>Mirror settings</title>
+		<link rel="stylesheet" href="/MMM-Household/settings.css" />
+	</head>
+	<body>
+		<main>
+			<header>
+				<h1>Mirror</h1>
+				<p id="live" class="live">Connecting to the mirror</p>
+			</header>
+
+			<nav id="people" class="people" aria-label="Whose settings"></nav>
+
+			<section aria-labelledby="schedule-title">
+				<h2 id="schedule-title">What I see</h2>
+				<p class="hint">Choose what the mirror shows you in each part of the day.</p>
+				<div class="scroll">
+					<table id="grid"></table>
+				</div>
+			</section>
+
+			<section aria-labelledby="quiet-title">
+				<h2 id="quiet-title">Quiet hours</h2>
+				<p class="hint">During quiet hours the screen stays off when the mirror sees you.</p>
+				<label class="row">
+					<span>Use quiet hours</span>
+					<input id="quiet-enabled" type="checkbox" />
+				</label>
+				<div class="row times">
+					<label>From <input id="quiet-from" type="time" /></label>
+					<label>To <input id="quiet-to" type="time" /></label>
+				</div>
+			</section>
+
+			<section aria-labelledby="face-title">
+				<h2 id="face-title">My face</h2>
+				<p id="face-state" class="hint"></p>
+				<button id="enroll" type="button">Teach the mirror my face</button>
+				<p id="enroll-note" class="hint" role="status"></p>
+			</section>
+
+			<p id="saved" class="saved" role="status"></p>
+		</main>
+		<script src="/MMM-Household/settings.js"></script>
+	</body>
+</html>
