@@ -50,6 +50,19 @@
   color: var(--color-text);
 }
 
+/* Account messages and task titles stay inside the calendar column. */
+.MMM-GoogleCalendar,
+.MMM-HouseholdTasks {
+  max-width: 420px;
+  overflow-wrap: anywhere;
+}
+
+.MMM-GoogleCalendar .module-content,
+.MMM-HouseholdTasks .module-content {
+  max-width: 100%;
+  white-space: normal;
+}
+
 /* Make room for the inventory without overlapping the greeting or the
  * bottom columns. These positions apply only while the panel is visible. */
 body:has(.MMM-UniFi:not(.hidden)) .region.upper.third {
@@ -89,8 +102,19 @@ body:has(.MMM-UniFi:not(.hidden)) .MMM-MoonPhase #moonphase-canvas {
     padding: 5px 0;
   }
 
+  .MMM-UniFi .unifi-mirror {
+    width: min(420px, 80vw);
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  body:has(.MMM-UniFi:not(.hidden)) .MMM-DailyPokemon #poke-pic,
+  body:has(.MMM-UniFi:not(.hidden)) .MMM-DailyPokemon #poke-pic-grayscale {
+    width: 120px;
+  }
+
   body:has(.MMM-UniFi:not(.hidden)) .region.middle.center .compliments .xlarge {
-    max-width: 300px;
+    max-width: 220px;
     margin-inline: auto;
     font-size: 30px;
     line-height: 1.15;
