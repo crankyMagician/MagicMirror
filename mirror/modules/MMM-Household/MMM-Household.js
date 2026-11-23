@@ -36,7 +36,13 @@ Module.register("MMM-Household", {
 		// The settings page has a port of its own, and these addresses may open
 		// it. Use CIDR ranges for the home network, for example "192.168.1.0/24".
 		settingsPort: 8081,
-		settingsAllow: ["127.0.0.1", "::1"]
+		settingsAllow: ["127.0.0.1", "::1"],
+		// Person -> the Google account whose photos they pick for their
+		// slideshow. A person not listed uses "<name>-personal".
+		photoAccounts: {},
+		// Person -> the address of a picture feed (HTTPS, JSON) that fills their
+		// frame with paintings. See art-feed.js for the format.
+		artFeeds: {}
 	},
 
 	// Names shown on the settings page for MagicMirror's default modules.

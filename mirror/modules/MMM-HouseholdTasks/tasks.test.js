@@ -1,7 +1,7 @@
 // Run with: node --test "mirror/modules/**/*.test.js"
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { dueLabel, localDay, needsRefresh, pickTasks } = require("./tasks");
+const { dueLabel, localDay, pickTasks } = require("./tasks");
 
 const now = new Date(2026, 10, 22, 21, 30); // Sunday evening, local time
 const due = (day) => `${day}T00:00:00.000Z`;
@@ -49,11 +49,4 @@ test("pickTasks leaves out completed tasks, subtasks and blank titles, and respe
 		{ title: "Three", position: "0006" }
 	] }];
 	assert.deepEqual(pickTasks(lists, 2).map((task) => task.title), ["One", "Two"]);
-});
-
-test("needsRefresh is true for a missing or nearly expired access token", () => {
-	const at = 1_000_000_000_000;
-	assert.equal(needsRefresh({ refresh_token: "r" }, at), true);
-	assert.equal(needsRefresh({ access_token: "a", expiry_date: at + 30 * 1000 }, at), true);
-	assert.equal(needsRefresh({ access_token: "a", expiry_date: at + 10 * 60 * 1000 }, at), false);
 });

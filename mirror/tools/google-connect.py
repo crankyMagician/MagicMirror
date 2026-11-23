@@ -5,6 +5,7 @@ Run this on a computer with a browser, once per account:
 
     mirror/tools/google-connect.py sam-personal
     mirror/tools/google-connect.py heather-merrows --email heather@example.com
+    mirror/tools/google-connect.py heather-personal --photos --app Firefox
 
 It opens Google's sign-in page, waits for the person to approve read-only
 access to their calendar and tasks, and writes the resulting token to
@@ -41,6 +42,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/tasks.readonly",
 ]
+# Lets the person choose photos for their slideshow through Google's picker.
+PHOTOS_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 REMOTE_DIR = "mirror-data/google"
@@ -63,12 +66,12 @@ def read_client() -> dict:
     return client
 
 
-def authorization_url(client_id: str, redirect_uri: str, state: str, challenge: str, email: str | None) -> str:
+def authorization_url(client_id: str, redirect_uri: str, state: str, challenge: str, email: str | None, scopes: list[str]) -> str:
     query = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": " ".join(SCOPES),
+        "scope": " ".join(scopes),
         "access_type": "offline",
         # Always ask, so Google returns a refresh token even on a repeat sign-in.
         "prompt": "consent",
@@ -85,6 +88,15 @@ def pkce_pair() -> tuple[str, str]:
     verifier = secrets.token_urlsafe(64)
     digest = hashlib.sha256(verifier.encode()).digest()
     return verifier, base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+
+def open_page(url: str, app: str | None, no_browser: bool) -> bool:
+    """Opens the sign-in page. Returns False when the address has to be printed."""
+    if no_browser:
+        return False
+    if app:
+        return subprocess.run(["open", "-a", app, url], check=False).returncode == 0
+    return webbrowser.open(url)
 
 
 class Callback(http.server.BaseHTTPRequestHandler):
@@ -164,6 +176,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("name", help="a short name for the account, for example sam-personal")
     parser.add_argument("--email", help="the account's address, to preselect it on Google's page")
+    parser.add_argument("--photos", action="store_true", help="also ask for access to photos the person picks, for the slideshow")
+    parser.add_argument("--app", help="open the sign-in page in this application, for example Firefox (macOS)")
     parser.add_argument("--no-browser", action="store_true", help="print the sign-in address instead of opening it")
     args = parser.parse_args()
     if not NAME_PATTERN.match(args.name):
@@ -174,10 +188,12 @@ def main() -> None:
     redirect_uri = f"http://127.0.0.1:{server.server_address[1]}"
     verifier, challenge = pkce_pair()
     state = secrets.token_urlsafe(24)
-    url = authorization_url(client["client_id"], redirect_uri, state, challenge, args.email)
+    scopes = SCOPES + ([PHOTOS_SCOPE] if args.photos else [])
+    url = authorization_url(client["client_id"], redirect_uri, state, challenge, args.email, scopes)
 
-    print(f"Sign in to Google as the account for '{args.name}' and approve read-only calendar and tasks access.")
-    if args.no_browser or not webbrowser.open(url):
+    wanted = "read-only calendar and tasks access" + (", plus the photos they pick" if args.photos else "")
+    print(f"Sign in to Google as the account for '{args.name}' and approve {wanted}.")
+    if not open_page(url, args.app, args.no_browser):
         print(f"Open this address in a browser on this computer:\n{url}")
     code = wait_for_code(server, state)
     server.server_close()

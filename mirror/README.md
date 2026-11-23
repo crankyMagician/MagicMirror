@@ -8,6 +8,8 @@ Everything specific to the mirror on the Raspberry Pi lives in this directory. U
 - `config/` holds `config.js` and `custom.css`. Private values go in `config/config.env` on the Pi, which is not committed.
 - `modules/MMM-Household/` is the module that switches the view by who is at the mirror and lets the screen sleep.
 - `services/` holds the Python face recognition service that the module starts.
+- `lib/` holds JavaScript shared by our modules, such as the Google token helper.
+- `tools/` holds scripts that run on another computer, such as the Google sign-in.
 
 ## Third-party modules
 
@@ -79,6 +81,22 @@ The tool asks for read-only access to Google Calendar and Google Tasks, and writ
 To disconnect an account, delete its token file on the Pi and remove the app at https://myaccount.google.com/permissions.
 
 Directory modules considered for tasks: `MMM-GoogleTasks` and `MMM-Tasks` both send results to every instance with nothing to tell accounts apart, so neither can show two accounts side by side. `MMM-HouseholdTasks` is our own for that reason.
+
+## Photo slideshow
+
+A person can have a framed photo on their view that changes every 20 seconds. The photos come from that person's own Google Photos.
+
+Google stopped letting apps read a person's albums in March 2025, and the directory's `MMM-GooglePhotos` says it no longer works for that reason. What Google still offers is its photo picker, so that is what the mirror uses:
+
+1. The person's Google account is connected with photo access: `mirror/tools/google-connect.py sam-personal --photos`.
+2. On the settings page, under "My photos", they press "Choose photos from Google Photos". A Google page opens and they select photos there.
+3. The mirror downloads the chosen photos (fitted to 1600 pixels) to `~/mirror-data/photos/<person>/` on the Pi and the slideshow picks them up within a minute.
+
+They can choose more at any time. "Remove all my photos" empties the folder after a second tap. Up to 300 photos are kept per person. The photos live only on the Pi and never enter this repository.
+
+A person who would sooner see art gets paintings in the same kind of frame. `artFeeds` in `MMM-Household`'s config names a picture feed for that person, and `MMM-Household/art-feed.js` copies the feed's pictures to `~/mirror-data/art/<person>/`, checks for a new set every six hours and removes the old set once the new one has arrived. The feed in use is built weekly by [tv-art](https://github.com/crankyMagician/tv-art) from The Met's public domain paintings. A feed is a JSON file with an `updated` stamp and an `images` list, and only HTTPS pictures on the feed's own host are downloaded. That person's settings page shows "My art" in place of "My photos".
+
+`MMM-Household/photos-routes.js` runs the picker flow, and `MMM-ImagesPhotos` from the module directory, pinned in `modules.lock`, shows the folder. `photoAccounts` in `MMM-Household`'s config names the Google account for each person when it is not `<name>-personal`.
 
 ## Voice commands
 

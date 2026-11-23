@@ -153,6 +153,66 @@
 		$("enroll").disabled = !data.now.camera;
 	};
 
+	// Tells whether the chosen person has a feature on their view, for
+	// example a photo frame or an art frame.
+	const has = (key) => data.features.some((feature) => feature.key === key && (feature.owners.length === 0 || feature.owners.includes(person)));
+
+	const setDate = (stamp) => {
+		const date = new Date(stamp);
+		return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+	};
+
+	// Paintings arrive from a feed on their own, so there is nothing to press.
+	const loadArt = async () => {
+		const name = person;
+		$("art-section").hidden = !has("art");
+		if (!has("art")) {
+			return;
+		}
+		try {
+			const art = await request(`/art/${encodeURIComponent(name)}`);
+			if (name !== person) {
+				return;
+			}
+			const since = setDate(art.updated);
+			const count = art.count === 1 ? "1 painting" : `${art.count} paintings`;
+			$("art-state").textContent = art.note
+				|| (art.count === 0 ? "Your frame has no paintings yet." : `Your frame shows ${count}${since ? ` from the set of ${since}` : ""}. A new set arrives every week.`);
+		} catch {
+			$("art-state").textContent = "";
+		}
+	};
+
+	// What the mirror last said about the chosen person's photos.
+	let photos = { count: 0, picking: false, note: "" };
+
+	const renderPhotos = () => {
+		const count = photos.count;
+		$("photos-state").textContent = count === 0
+			? "Your slideshow has no photos yet. Choose some from your Google Photos and the mirror keeps a copy."
+			: `Your slideshow has ${count} photo${count === 1 ? "" : "s"}. Choose more at any time.`;
+		$("photos-pick").textContent = photos.picking ? "Open the Google Photos page again" : "Choose photos from Google Photos";
+		$("photos-clear").hidden = count === 0;
+		$("photos-note").textContent = photos.note || "";
+	};
+
+	const loadPhotos = async () => {
+		const name = person;
+		$("photos-section").hidden = !has("photos");
+		if (!has("photos")) {
+			return;
+		}
+		try {
+			const fresh = await request(`/photos/${encodeURIComponent(name)}`);
+			if (name === person) {
+				photos = fresh;
+				renderPhotos();
+			}
+		} catch {
+			// The live line already says when the mirror is not answering.
+		}
+	};
+
 	const render = () => {
 		$("live").textContent = describeLive(data.now);
 		renderAppearance();
@@ -160,6 +220,11 @@
 		renderGrid();
 		renderQuiet();
 		renderFace();
+		photos = { count: 0, picking: false, note: "" };
+		renderPhotos();
+		loadPhotos();
+		$("art-state").textContent = "";
+		loadArt();
 	};
 
 	const renderAppearance = () => {
@@ -200,7 +265,55 @@
 
 	// Keeps the line at the top and the face status current without touching
 	// switches the person may be in the middle of changing.
+	const bindPhotos = () => {
+		$("photos-pick").addEventListener("click", async () => {
+			// Open the tab during the click, or the browser blocks it as a pop-up.
+			const tab = window.open("about:blank", "_blank");
+			try {
+				const opened = await send("POST", `/photos/${encodeURIComponent(person)}/pick`, {});
+				if (tab) {
+					tab.location = opened.pickerUri;
+					photos = { ...photos, picking: true, note: "Choose your photos on the Google page. They appear on the mirror a minute after you finish." };
+				} else {
+					photos = { ...photos, picking: true, note: "Your browser blocked the new tab. Allow pop-ups for this page and try again in a few minutes." };
+				}
+			} catch (error) {
+				if (tab) {
+					tab.close();
+				}
+				photos = { ...photos, note: error.message };
+			}
+			renderPhotos();
+		});
+
+		// Removing photos takes two taps, so one slip does not empty the slideshow.
+		let armed = null;
+		$("photos-clear").addEventListener("click", async (event) => {
+			const button = event.target;
+			if (!armed) {
+				button.textContent = "Tap again to remove them all";
+				armed = setTimeout(() => {
+					armed = null;
+					button.textContent = "Remove all my photos";
+				}, 4000);
+				return;
+			}
+			clearTimeout(armed);
+			armed = null;
+			button.textContent = "Remove all my photos";
+			try {
+				await send("POST", `/photos/${encodeURIComponent(person)}/clear`, {});
+				photos = { count: 0, picking: photos.picking, note: "Removed." };
+			} catch (error) {
+				photos = { ...photos, note: error.message };
+			}
+			renderPhotos();
+		});
+	};
+
 	const poll = async () => {
+		loadPhotos();
+		loadArt();
 		try {
 			const fresh = await request("/state");
 			data.now = fresh.now;
@@ -234,6 +347,7 @@
 		});
 		bindQuiet();
 		bindEnroll();
+		bindPhotos();
 		render();
 		setInterval(poll, 5000);
 	};

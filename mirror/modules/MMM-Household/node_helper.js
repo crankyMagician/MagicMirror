@@ -8,6 +8,8 @@ const NodeHelper = require("node_helper");
 const Log = require("logger");
 const { DEFAULT_BLOCKS, ProfileStore, problemWith, viewFor } = require("./profiles");
 const { addUniFiRoutes } = require("./unifi-routes");
+const { addPhotoRoutes } = require("./photos-routes");
+const { addArtRoutes } = require("./art-feed");
 
 const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-data");
 const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
@@ -78,6 +80,9 @@ module.exports = NodeHelper.create({
 		clearInterval(this.clock);
 		if (this.settingsServer) {
 			this.settingsServer.close();
+		}
+		if (this.stopArt) {
+			this.stopArt();
 		}
 		this.cancelScreenOff();
 		if (this.presence) {
@@ -157,6 +162,24 @@ module.exports = NodeHelper.create({
 				return;
 			}
 			res.json({ enrolling: name });
+		});
+
+		// Each person's slideshow photos, chosen through Google's photo picker.
+		const photoAccounts = this.getServerModuleConfig().photoAccounts || {};
+		addPhotoRoutes(app, {
+			people: () => (this.config ? this.config.people : []),
+			accountFor: (person) => photoAccounts[person] || `${person}-personal`,
+			googleDir: path.join(DATA_DIR, "google"),
+			photosDir: path.join(DATA_DIR, "photos"),
+			guards: [jsonOnly, json],
+			log: Log
+		});
+
+		// A person's frame can show paintings from a published feed instead.
+		this.stopArt = addArtRoutes(app, {
+			feeds: this.getServerModuleConfig().artFeeds || {},
+			artDir: path.join(DATA_DIR, "art"),
+			log: Log
 		});
 	},
 

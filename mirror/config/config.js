@@ -11,7 +11,8 @@
 // the paths can come from the environment. Strings are joined with + here,
 // because MagicMirror replaces dollar-brace names from the environment in
 // this file's text before it runs.
-const googleDir = (process.env.MIRROR_DATA_DIR || process.env.HOME + "/mirror-data") + "/google";
+const dataDir = process.env.MIRROR_DATA_DIR || process.env.HOME + "/mirror-data";
+const googleDir = dataDir + "/google";
 const googleAccount = (name) => ({
 	tokenFile: googleDir + "/" + name + ".json",
 	credentialsFile: googleDir + "/credentials.json"
@@ -35,6 +36,35 @@ const googleTasks = (person, account, header, feature) => ({
 	config: {
 		...googleAccount(account),
 		maxTasks: 4
+	}
+});
+// A framed photo from the person's own folder, filled from Google Photos on
+// the settings page. It changes every 20 seconds.
+const photoFrame = (person) => ({
+	module: "MMM-ImagesPhotos",
+	classes: person + " feature-photos",
+	position: "lower_third",
+	config: {
+		path: dataDir + "/photos/" + person,
+		updateInterval: 20 * 1000,
+		maxWidth: "380px",
+		maxHeight: "380px",
+		opacity: 1
+	}
+});
+
+// A framed painting from a feed of public domain art, for someone who would
+// sooner see art than their own photos. MMM-Household downloads the feed.
+const artFrame = (person) => ({
+	module: "MMM-ImagesPhotos",
+	classes: person + " feature-art",
+	position: "lower_third",
+	config: {
+		path: dataDir + "/art/" + person,
+		updateInterval: 60 * 1000,
+		maxWidth: "380px",
+		maxHeight: "380px",
+		opacity: 1
 	}
 });
 
@@ -67,12 +97,16 @@ const config = {
 				// The settings page: http://mirror.local:8081/ from the home network.
 				settingsPort: 8081,
 				settingsAllow: ["127.0.0.1", "::1", "192.168.1.0/24", "192.168.10.0/24"],
+				// Heather's frame shows a weekly set of paintings from The Met.
+				artFeeds: { heather: "https://crankymagician.github.io/tv-art/mirror/feed.json" },
 				// Names on the settings page for the third-party modules below.
 				labels: {
 					calendar: "Calendar",
 					"work-calendar": "Work calendar",
 					tasks: "Tasks",
 					"work-tasks": "Work tasks",
+					photos: "Photos",
+					art: "Art",
 					unifi: "Network devices",
 					"MMM-MoonPhase": "Moon",
 					"MMM-APOD": "Space picture",
@@ -98,6 +132,8 @@ const config = {
 					"work calendar": "work-calendar",
 					tasks: "tasks",
 					"work tasks": "work-tasks",
+					photos: "photos",
+					art: "art",
 					weather: "weather",
 					forecast: "forecast",
 					news: "newsfeed",
@@ -127,6 +163,8 @@ const config = {
 		googleTasks("sam", "sam-merrows", "Merrows tasks", "work-tasks"),
 		googleTasks("heather", "heather-personal", "Tasks", "tasks"),
 		googleTasks("heather", "heather-merrows", "Merrows tasks", "work-tasks"),
+		photoFrame("sam"),
+		artFrame("heather"),
 		{
 			module: "weather",
 			position: "top_right",

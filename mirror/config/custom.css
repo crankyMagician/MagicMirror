@@ -255,3 +255,15 @@ body.profile-heather .module-header {
   border-bottom-color: color-mix(in srgb, var(--mirror-accent) 55%, transparent);
   color: var(--mirror-accent);
 }
+
+/* The slideshow photo sits in a soft frame. */
+.MMM-ImagesPhotos img.bgimage {
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 18%);
+}
+
+/* A painting comes on black with its caption, so it needs no frame. */
+.MMM-ImagesPhotos.feature-art img.bgimage {
+  border-radius: 0;
+  box-shadow: none;
+}

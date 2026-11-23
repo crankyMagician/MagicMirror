@@ -200,7 +200,8 @@ input:disabled {
   opacity: 0.45;
 }
 
-#enroll {
+#enroll,
+#photos-pick {
   width: 100%;
   padding: 0.8rem;
   border: 1px solid var(--accent);
@@ -211,13 +212,26 @@ input:disabled {
   font-weight: 600;
 }
 
-#enroll:disabled {
+#enroll:disabled,
+#photos-pick:disabled {
   border-color: var(--line);
   color: var(--muted);
 }
 
-#enroll-note {
+#enroll-note,
+#photos-note {
   margin: 0.7rem 0 0;
+}
+
+#photos-clear {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.6rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: underline;
 }
 
 .saved {
