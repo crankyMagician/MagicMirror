@@ -1,15 +1,30 @@
+/* The greeting is one row: the Pokémon, when there is one, beside the words. */
 .greeter {
-  text-align: center;
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  column-gap: 18px;
+  align-items: center;
+  justify-content: center;
+  text-align: left;
 }
 
 .greeter-sprite {
-  display: block;
-  width: 180px;
-  height: 180px;
-  margin: 0 auto 12px;
+  grid-row: 1 / span 2;
+  width: 84px;
+  height: 84px;
   object-fit: contain;
 }
 
+.greeter-text {
+  align-self: end;
+  line-height: 1.2;
+}
+
+.greeter-text:last-child {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
 .greeter-companion {
-  margin-top: 6px;
+  align-self: start;
 }

@@ -43,15 +43,15 @@ const googleTasks = (person, account, header, feature) => ({
 });
 // A framed photo from the person's own folder, filled from Google Photos on
 // the settings page. It changes every 20 seconds. It sits in the right
-// column, between the network card and the Pokémon of the day.
+// column, under the network card.
 const photoFrame = (person) => ({
 	module: "MMM-ImagesPhotos",
 	classes: text(person, " feature-photos"),
-	position: "bottom_right",
+	position: "top_right",
 	config: {
 		path: text(dataDir, "/photos/", person),
 		updateInterval: 20 * 1000,
-		maxWidth: "380px",
+		maxWidth: "100%",
 		maxHeight: "300px",
 		opacity: 1
 	}
@@ -62,11 +62,11 @@ const photoFrame = (person) => ({
 const artFrame = (person) => ({
 	module: "MMM-ImagesPhotos",
 	classes: text(person, " feature-art"),
-	position: "lower_third",
+	position: "top_right",
 	config: {
 		path: text(dataDir, "/art/", person),
 		updateInterval: 60 * 1000,
-		maxWidth: "380px",
+		maxWidth: "100%",
 		maxHeight: "380px",
 		opacity: 1
 	}
@@ -86,6 +86,11 @@ const config = {
 	timeFormat: 12,
 	units: "imperial",
 
+	// The page is a band on top (top_bar) for what the mirror says, two
+	// columns (top_left and top_right) and the news (bottom_bar). Use only
+	// these four positions: custom.css lays them out so they cannot overlap,
+	// and MMM-Household gives a full column's modules turns. A module's place
+	// in its column is its place in this list.
 	modules: [
 		{
 			module: "alert"
@@ -187,8 +192,6 @@ const config = {
 		googleTasks("sam", "sam-merrows", "Merrows tasks", "work-tasks"),
 		googleTasks("heather", "heather-personal", "Tasks", "tasks"),
 		googleTasks("heather", "heather-merrows", "Merrows tasks", "work-tasks"),
-		photoFrame("sam"),
-		artFrame("heather"),
 		{
 			module: "weather",
 			position: "top_right",
@@ -263,7 +266,7 @@ const config = {
 			// and a special message on special days. The days are private and
 			// live in config.env.
 			module: "MMM-Briefing",
-			position: "middle_center",
+			position: "top_bar",
 			config: {
 				people: {
 					sam: { name: "Sam" },
@@ -299,7 +302,7 @@ const config = {
 			// Greets a recognized person. Heather's greeting comes with one of
 			// her favorite Pokémon, a different one each day.
 			module: "MMM-Greeter",
-			position: "upper_third",
+			position: "top_bar",
 			config: {
 				people: {
 					sam: { name: "Sam" },
@@ -310,12 +313,12 @@ const config = {
 		{
 			module: "compliments",
 			classes: "sam",
-			position: "middle_center"
+			position: "top_bar"
 		},
 		{
 			module: "compliments",
 			classes: "heather",
-			position: "middle_center",
+			position: "top_bar",
 			config: {
 				// Starter lines. Sam replaces these with his own.
 				compliments: {
@@ -329,7 +332,7 @@ const config = {
 		{
 			module: "MMM-UniFi",
 			classes: "sam heather feature-unifi",
-			position: "middle_center",
+			position: "top_right",
 			config: {
 				controllerUrl: "https://192.168.1.1",
 				site: "default",
@@ -341,11 +344,13 @@ const config = {
 				rotationInterval: 12000
 			}
 		},
+		photoFrame("sam"),
+		artFrame("heather"),
 		{
 			module: "MMM-PokemonGOEvents",
 			classes: "sam heather",
 			header: "Pokémon GO",
-			position: "bottom_left",
+			position: "top_left",
 			config: {
 				category: "current",
 				maxEvents: 3,
@@ -353,19 +358,10 @@ const config = {
 			}
 		},
 		{
-			module: "MMM-APOD",
-			classes: "heather",
-			position: "bottom_left",
-			config: {
-				maxMediaWidth: 420,
-				maxMediaHeight: 300
-			}
-		},
-		{
 			// A different Pokémon each day, picked from the date. Both see it.
 			module: "MMM-DailyPokemon",
 			classes: "sam heather",
-			position: "bottom_right",
+			position: "top_left",
 			config: {
 				pickByDate: true,
 				stats: false,
@@ -375,16 +371,25 @@ const config = {
 			}
 		},
 		{
+			module: "MMM-APOD",
+			classes: "heather",
+			position: "top_left",
+			config: {
+				maxMediaWidth: 420,
+				maxMediaHeight: 300
+			}
+		},
+		{
 			module: "MMM-WordOfTheDay",
 			classes: "heather",
-			position: "bottom_right"
+			position: "top_right"
 		},
 		{
 			module: "MMM-History",
 			classes: "heather",
-			position: "bottom_right",
+			position: "top_right",
 			config: {
-				maxWidth: "420px",
+				maxWidth: "100%",
 				maxLength: 220
 			}
 		},

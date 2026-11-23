@@ -11,6 +11,18 @@ Everything specific to the mirror on the Raspberry Pi lives in this directory. U
 - `lib/` holds JavaScript shared by our modules, such as the Google token helper.
 - `tools/` holds scripts that run on another computer, such as the Google sign-in.
 
+## The page
+
+The page has four places, and `config.js` uses only these positions:
+
+- `top_bar` is a band for what the mirror says to you. It holds one thing at a time: an answer or a special-day line, else the greeting, else a compliment.
+- `top_left` and `top_right` are two columns. A module's place in its column is its place in the config's list.
+- `bottom_bar` is the news.
+
+`config/custom.css` lays these out as a stack, so no module can lie on top of another. MagicMirror's other positions (the middle, the thirds, the bottom corners) float over the columns and are not used.
+
+A column has a fixed height. When a person's modules do not all fit, `MMM-Household` shows the ones that fit and gives the rest a turn every `turnSeconds` (40 by default). The modules named in its `pinned` option (the clock, the weather and the calendar) never wait. `modules/MMM-Household/fit.js` holds the packing, with tests beside it.
+
 ## Third-party modules
 
 Modules from the MagicMirror module directory are not copied into this repository. `modules.lock` names each one with its repository and an exact commit, and `deploy/install-modules.sh` clones them into `~/MagicMirror/modules` at those commits. npm runs with `--ignore-scripts`, so no module's install script executes.
