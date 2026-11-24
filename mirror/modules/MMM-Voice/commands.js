@@ -1,5 +1,14 @@
 /* Builds the command list that mirror/services/voice.py listens for. */
 
+// Spoken brightness -> percent, for "set the NAME to fifty percent".
+const LIGHT_LEVELS = {
+	"ten percent": 10,
+	"twenty five percent": 25,
+	"fifty percent": 50,
+	"seventy five percent": 75,
+	"one hundred percent": 100
+};
+
 /**
  * Expands the module's config into commands with full phrases.
  * @param {object} config MMM-Voice's config
@@ -7,9 +16,12 @@
  * @param {string[]} [config.wakeWords] several wake phrases in place of the one word: every command answers to each of them
  * @param {object} config.commands command id -> phrases without the wake word
  * @param {object} config.features spoken name -> feature key. Each gets "show NAME", "hide NAME" and "show only NAME".
+ * @param {object} [config.lights] spoken name -> light key. Each gets "turn on the NAME", "turn off the NAME" and "set the NAME to LEVEL".
+ * @param {object} [config.scenes] spoken name -> scene key. The name alone is the command.
+ * @param {object} [config.lightLevels] spoken brightness -> percent
  * @returns {object[]} commands as { id, phrases }
  */
-const buildCommands = ({ wakeWord, wakeWords, commands = {}, features = {} }) => {
+const buildCommands = ({ wakeWord, wakeWords, commands = {}, features = {}, lights = {}, scenes = {}, lightLevels = LIGHT_LEVELS }) => {
 	const wakes = Array.isArray(wakeWords) && wakeWords.length > 0 ? wakeWords : [wakeWord];
 	const withWake = (phrase) => wakes.map((wake) => `${wake} ${phrase}`.toLowerCase());
 	const list = Object.entries(commands).map(([id, phrases]) => ({ id, phrases: phrases.flatMap(withWake) }));
@@ -19,6 +31,19 @@ const buildCommands = ({ wakeWord, wakeWords, commands = {}, features = {} }) =>
 		}
 		// "Show only the calendar" puts that one feature alone on the screen.
 		list.push({ id: `only:${key}`, phrases: [...withWake(`show only ${spoken}`), ...withWake(`show only the ${spoken}`), ...withWake(`just the ${spoken}`)] });
+	}
+	// Lights name the state they want. There is no "toggle", so a command
+	// heard twice does the same thing twice.
+	for (const [spoken, key] of Object.entries(lights)) {
+		for (const state of ["on", "off"]) {
+			list.push({ id: `light:${state}:${key}`, phrases: [...withWake(`turn ${state} the ${spoken}`), ...withWake(`${spoken} ${state}`)] });
+		}
+		for (const [level, percent] of Object.entries(lightLevels)) {
+			list.push({ id: `light:level:${key}:${percent}`, phrases: [...withWake(`set the ${spoken} to ${level}`), ...withWake(`${spoken} to ${level}`)] });
+		}
+	}
+	for (const [spoken, key] of Object.entries(scenes)) {
+		list.push({ id: `light:scene:${key}`, phrases: withWake(spoken) });
 	}
 	return list;
 };
@@ -59,4 +84,4 @@ const chimeWav = (sampleRate = 22050) => {
 	return Buffer.concat([header, data]);
 };
 
-module.exports = { buildCommands, chimeWav };
+module.exports = { buildCommands, chimeWav, LIGHT_LEVELS };

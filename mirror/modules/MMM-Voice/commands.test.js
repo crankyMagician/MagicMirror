@@ -41,3 +41,28 @@ test("no two commands share a phrase", () => {
 	const phrases = commands.flatMap((command) => command.phrases);
 	assert.equal(new Set(phrases).size, phrases.length);
 });
+
+test("each light gets on, off and level commands that name the state they want", () => {
+	const commands = buildCommands({ wakeWord: "mirror", commands: {}, features: {}, lights: { "bedroom lights": "bedroom" }, lightLevels: { "fifty percent": 50 } });
+	assert.deepEqual(commands, [
+		{ id: "light:on:bedroom", phrases: ["mirror turn on the bedroom lights", "mirror bedroom lights on"] },
+		{ id: "light:off:bedroom", phrases: ["mirror turn off the bedroom lights", "mirror bedroom lights off"] },
+		{ id: "light:level:bedroom:50", phrases: ["mirror set the bedroom lights to fifty percent", "mirror bedroom lights to fifty percent"] }
+	]);
+	assert.equal(commands.some((command) => (/toggle/).test(command.id)), false);
+});
+
+test("a scene's name is its command, and lights add no phrase that another command has", () => {
+	const commands = buildCommands({
+		wakeWord: "mirror",
+		commands: { good_night: ["good night"] },
+		features: { lights: "lights" },
+		lights: { "bedroom lights": "bedroom", "kitchen lights": "kitchen" },
+		scenes: { "bedroom evening": "bedroom_evening" }
+	});
+	assert.deepEqual(commands.find((command) => command.id === "light:scene:bedroom_evening").phrases, ["mirror bedroom evening"]);
+	// Five levels by default.
+	assert.equal(commands.filter((command) => command.id.startsWith("light:level:kitchen:")).length, 5);
+	const phrases = commands.flatMap((command) => command.phrases);
+	assert.equal(new Set(phrases).size, phrases.length);
+});
