@@ -261,17 +261,26 @@ git clone https://github.com/crankyMagician/MagicMirror.git ~/MagicMirror
 sudo ~/MagicMirror/mirror/deploy/setup-pi.sh
 ```
 
-The script installs Node.js 24, sway and the libraries Electron needs. It links the config into place and enables `magicmirror-kiosk.service`. Run it again after pulling new code.
+The script installs Node.js 24, sway and the libraries Electron needs. It links the config into place and enables `magicmirror-server.service` and `magicmirror-kiosk.service`. Run it again after pulling new code.
 
 ## How it runs
 
-`magicmirror-kiosk.service` starts sway on tty1 as the login user. sway starts MagicMirror, and when MagicMirror exits sway exits too, so systemd restarts the whole session.
+Two systemd units, both started at boot:
+
+- `magicmirror-server.service` is MagicMirror's server: the settings page, the camera, the microphone and the speaker. It has no window and needs no display.
+- `magicmirror-kiosk.service` is the screen. It starts sway on tty1 as the login user, and sway starts Electron, which shows the server's page. When Electron exits sway exits too, so systemd restarts the whole session.
+
+The server does not depend on the kiosk. With no monitor attached the kiosk cannot draw, and the settings page keeps working: `MMM-Household` remembers the config and the feature list the page last sent (`~/mirror-data/household-last.json`) and starts from them. What the mirror shows and says still comes from the page on the screen. When the server restarts, the page on the screen loads again by itself.
 
 ```sh
-systemctl status magicmirror-kiosk       # state of the kiosk
-journalctl -t magicmirror -f             # MagicMirror's log
-sudo systemctl restart magicmirror-kiosk # restart after a config change
+systemctl status magicmirror-server magicmirror-kiosk
+journalctl -t magicmirror -f               # the server's log, with every module's lines
+journalctl -t magicmirror-screen -f        # Electron's own lines
+sudo systemctl restart magicmirror-server  # after a change to config.js or a node helper
+sudo systemctl restart magicmirror-kiosk   # after a change to the sway config
 ```
+
+A change to a module's browser code or to `custom.css` needs only a reload of the page, which a server restart also causes.
 
 ## Rotate the screen
 

@@ -121,11 +121,19 @@ if [ ! -f "$ETC_DIR/output.conf" ]; then
 	cp "$DEPLOY_DIR/output.conf" "$ETC_DIR/output.conf"
 fi
 chmod 755 "$DEPLOY_DIR/kiosk-session.sh"
+# Two units: the server (settings page, camera, voice) and the kiosk, which
+# is only the screen. The server keeps running when the kiosk cannot start,
+# for example with no monitor attached.
+render "$DEPLOY_DIR/magicmirror-server.service" > /etc/systemd/system/magicmirror-server.service
 render "$DEPLOY_DIR/magicmirror-kiosk.service" > /etc/systemd/system/magicmirror-kiosk.service
 systemctl daemon-reload
 # The kiosk owns tty1. A login prompt is still available on tty2 (Ctrl+Alt+F2).
 systemctl disable --now getty@tty1.service 2>/dev/null || true
-systemctl enable magicmirror-kiosk.service
-systemctl restart magicmirror-kiosk.service
+systemctl enable magicmirror-server.service magicmirror-kiosk.service
+# Stop the kiosk first. An older kiosk ran the server inside itself and
+# would hold its ports.
+systemctl stop magicmirror-kiosk.service
+systemctl restart magicmirror-server.service
+systemctl start magicmirror-kiosk.service
 
-echo "==> Done. Check it with: systemctl status magicmirror-kiosk"
+echo "==> Done. Check it with: systemctl status magicmirror-server magicmirror-kiosk"

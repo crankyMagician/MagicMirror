@@ -1,4 +1,4 @@
-const { execFile, spawn } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -11,6 +11,7 @@ const { DEFAULTS: SPEAK_DEFAULTS } = require("../MMM-Speak/speech");
 const { createSynth } = require("../MMM-Speak/synth");
 const { ProfileStore, canFocus, normalize, problemWith, problemWithMirror, viewFor } = require("./profiles");
 const { ROTATIONS, currentRotation, swayArguments } = require("./rotation");
+const { swaymsg } = require("./sway");
 const { addUniFiRoutes } = require("./unifi-routes");
 const { addVoiceRoutes, voicesOn } = require("./voice-routes");
 const { createVocabularyCheck, phraseProblem, startsWithPhrase, tidyPhrase } = require("./wake-phrase");
@@ -20,6 +21,9 @@ const { addArtRoutes } = require("./art-feed");
 const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-data");
 const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
 const PROFILES_FILE = path.join(DATA_DIR, "profiles.json");
+// What the page on the screen last told this helper: the module's config with
+// its defaults, and the list of features. See remember() below.
+const REMEMBERED_FILE = path.join(DATA_DIR, "household-last.json");
 
 // Options the helper needs before the browser sends its config.
 const SERVER_DEFAULTS = { settingsPort: 8081, settingsAllow: ["127.0.0.1", "::1"], settingsHosts: ["localhost", "mirror", "mirror.local"], login: {} };
@@ -60,9 +64,11 @@ module.exports = NodeHelper.create({
 		this.clock = setInterval(() => this.refresh(), 30000);
 
 		this.startSettingsServer();
+		this.recall();
 		// A direction saved on the settings page wins over the kiosk's
-		// output.conf. This runs before the window opens, so nothing turns on
-		// screen at start.
+		// output.conf. The kiosk applies it itself before it draws anything
+		// (kiosk-session.sh). This covers a server that starts while a kiosk
+		// is already running.
 		if (this.mirror.rotation) {
 			this.applyRotation();
 		} else {
@@ -324,16 +330,27 @@ module.exports = NodeHelper.create({
 		if (notification === "CONFIG") {
 			// The browser sends CONFIG again on every reload. Start the service
 			// once and answer a reload with the current state.
-			if (this.config === null) {
-				this.config = payload;
+			const first = this.config === null;
+			this.config = payload;
+			this.remember();
+			if (first) {
 				this.startPresence();
 				this.scheduleScreenOff();
+			} else {
+				// The page loaded again, which is also what a new kiosk session
+				// looks like from here. A new session starts with the screen on
+				// and knows nothing of what this helper decided before.
+				this.sendScreen();
+				if (!this.mirror.rotation) {
+					this.readRotation();
+				}
 			}
 			this.lastView = "";
 			this.sendMirror();
 			this.refresh();
 		} else if (notification === "FEATURES") {
 			this.features = payload;
+			this.remember();
 			this.lastView = "";
 			this.refresh();
 		} else if (notification === "VOICE") {
@@ -346,6 +363,42 @@ module.exports = NodeHelper.create({
 	 * @param {object} command the command, with an `id` such as "wake_up" or "hide:calendar"
 	 */
 	/** Tells the other modules the mirror's name and what to listen for. */
+	/**
+	 * Keeps what the page on the screen sent, so the next start does not have
+	 * to wait for a screen. The config and the feature list come from the
+	 * browser, and without them the settings page has nothing to show. With
+	 * no monitor attached no page ever loads.
+	 */
+	remember () {
+		try {
+			fs.writeFileSync(`${REMEMBERED_FILE}.tmp`, JSON.stringify({ config: this.config, features: this.features }), { mode: 0o600 });
+			fs.renameSync(`${REMEMBERED_FILE}.tmp`, REMEMBERED_FILE);
+		} catch (error) {
+			Log.warn(`Could not keep the config for the next start: ${error.message}`);
+		}
+	},
+
+	/**
+	 * Starts from what the page sent last time. The page replaces it as soon
+	 * as one loads.
+	 */
+	recall () {
+		let last;
+		try {
+			last = JSON.parse(fs.readFileSync(REMEMBERED_FILE, "utf8"));
+		} catch {
+			return;
+		}
+		if (!last || typeof last.config !== "object" || last.config === null || !Array.isArray(last.config.people)) {
+			return;
+		}
+		this.config = last.config;
+		this.features = Array.isArray(last.features) ? last.features : [];
+		Log.log("Started from the config the screen sent last time");
+		this.startPresence();
+		this.scheduleScreenOff();
+	},
+
 	sendMirror () {
 		this.sendSocketNotification("MIRROR", { name: this.mirror.name, wakePhrase: this.mirror.wakePhrase, wakeCandidate: this.mirror.wakeCandidate });
 	},
@@ -609,12 +662,10 @@ module.exports = NodeHelper.create({
 	 */
 	applyRotation () {
 		const rotation = this.mirror.rotation;
-		if (!process.env.SWAYSOCK) {
-			Log.log(`Screen direction ${rotation} (skipped, not running under sway)`);
-			return;
-		}
-		execFile("swaymsg", swayArguments(rotation), (error) => {
-			if (error) {
+		swaymsg(swayArguments(rotation), (error) => {
+			if (error && error.noSession) {
+				Log.log(`Screen direction ${rotation} (skipped, no kiosk is running)`);
+			} else if (error) {
 				Log.error(`swaymsg failed: ${error.message}`);
 			} else {
 				this.rotationNow = rotation;
@@ -628,10 +679,7 @@ module.exports = NodeHelper.create({
 	 * before anyone has chosen a direction there.
 	 */
 	readRotation () {
-		if (!process.env.SWAYSOCK) {
-			return;
-		}
-		execFile("swaymsg", ["-t", "get_outputs", "-r"], (error, stdout) => {
+		swaymsg(["-t", "get_outputs", "-r"], (error, stdout) => {
 			if (!error) {
 				this.rotationNow = currentRotation(stdout) || this.rotationNow;
 			}
@@ -643,15 +691,22 @@ module.exports = NodeHelper.create({
 			return;
 		}
 		this.screenOn = on;
-		if (!process.env.SWAYSOCK) {
-			Log.log(`Screen ${on ? "on" : "off"} (skipped, not running under sway)`);
-			return;
-		}
-		// The screen is blanked by disabling the output. `output power off` also
-		// blanks it, but Electron's Wayland backend crashes when the output
-		// powers back on after more than a few seconds.
-		execFile("swaymsg", ["output", "*", on ? "enable" : "disable"], (error) => {
-			if (error) {
+		this.sendScreen();
+	},
+
+	/**
+	 * Tells the kiosk's sway session whether the screen is on.
+	 *
+	 * The screen is blanked by disabling the output. `output power off` also
+	 * blanks it, but Electron's Wayland backend crashes when the output powers
+	 * back on after more than a few seconds.
+	 */
+	sendScreen () {
+		const on = this.screenOn;
+		swaymsg(["output", "*", on ? "enable" : "disable"], (error) => {
+			if (error && error.noSession) {
+				Log.log(`Screen ${on ? "on" : "off"} (skipped, no kiosk is running)`);
+			} else if (error) {
 				Log.error(`swaymsg failed: ${error.message}`);
 			} else {
 				Log.log(`Screen ${on ? "on" : "off"}`);

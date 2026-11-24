@@ -80,6 +80,10 @@ const config = {
 	basePath: "/",
 	ipWhitelist: ["127.0.0.1", "::1"],
 
+	// The server runs apart from the screen (magicmirror-server.service). When
+	// it restarts, the page on the screen loads again by itself.
+	reloadAfterServerRestart: true,
+
 	language: "en",
 	locale: "en-US",
 	logLevel: ["INFO", "LOG", "WARN", "ERROR"],

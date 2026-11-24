@@ -1,13 +1,15 @@
 # Template. setup-pi.sh fills in @USER@, @MM_DIR@ and @ETC_DIR@ and installs
 # the result as /etc/systemd/system/magicmirror-kiosk.service.
 #
-# The unit runs sway on tty1. sway starts MagicMirror and exits when MagicMirror
-# exits, so Restart=always brings the whole session back after a crash.
+# The unit runs sway on tty1. sway starts Electron, which shows the page of
+# magicmirror-server.service, and exits when Electron exits, so Restart=always
+# brings the whole session back after a crash. Stopping or losing the kiosk
+# does not stop the server.
 
 [Unit]
 Description=MagicMirror kiosk (sway on tty1)
-After=systemd-user-sessions.service network-online.target getty@tty1.service
-Wants=network-online.target
+After=systemd-user-sessions.service network-online.target getty@tty1.service magicmirror-server.service
+Wants=network-online.target magicmirror-server.service
 Conflicts=getty@tty1.service
 
 [Service]
