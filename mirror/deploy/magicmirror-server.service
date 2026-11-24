@@ -1,0 +1,24 @@
+# Template. setup-pi.sh fills in @USER@ and @MM_DIR@ and installs the result
+# as /etc/systemd/system/magicmirror-server.service.
+#
+# The MagicMirror server: the settings page, the camera, the microphone and
+# the speaker. It has no window and needs no display. The kiosk
+# (magicmirror-kiosk.service) is only the screen that shows its page, so a
+# missing monitor or a crashed kiosk leaves all of this running.
+
+[Unit]
+Description=MagicMirror server (settings page, camera, voice)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@MM_DIR@
+ExecStart=/usr/bin/node serveronly
+# MagicMirror's own lines stay under: journalctl -t magicmirror
+SyslogIdentifier=magicmirror
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
