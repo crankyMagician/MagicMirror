@@ -238,9 +238,10 @@
 	 *   make the entry count on every day of a season. `lines` in place of
 	 *   `line` gives the days of a season a line each, in turn. `until`
 	 *   ("MM-DD") makes "{days}" in a line the days left to that date.
+	 *   `scene` names a scene of MMM-Lights to set when the line is said.
 	 * @param {string} person the recognized person
 	 * @param {Date} now the current time
-	 * @returns {object[]} matching entries as { key, line }
+	 * @returns {object[]} matching entries as { key, line }, with `scene` when the entry has one
 	 */
 	const specialFor = (days, person, now) => {
 		const full = localDay(now);
@@ -259,8 +260,9 @@
 			// has a line of its own.
 			.map((found) => ({ ...found, left: found.entry.until ? daysUntil(found.entry.until, now) : null }))
 			.filter(({ left }) => left === null || left > 0)
-			.map(({ index, text, years, left }) => ({
+			.map(({ entry, index, text, years, left }) => ({
 				key: `${full}.${person}.${index}`,
+				...typeof entry.scene === "string" && entry.scene ? { scene: entry.scene } : {},
 				line: text
 					.trim()
 					.replaceAll("{years}", years === null ? "" : String(years))

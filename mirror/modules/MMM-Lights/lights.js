@@ -11,7 +11,7 @@ const DEFAULTS = {
 	// The scenes the mirror may set, by key: { say, entity }. The entity is
 	// a scene or a script in Home Assistant. A script names the lights to
 	// count afterwards in `members`, and `done` is said in place of
-	// "NAME is set".
+	// "NAME is set". `quiet: true` says nothing when the scene worked.
 	scenes: {},
 	// Seconds between looks at the lights for the card.
 	pollSeconds: 20,
@@ -103,7 +103,7 @@ const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
  * Words what the mirror says after a command, from what the lights reported.
  * @param {object} command what `parse` returned
  * @param {object} outcome `{ total, reached }` from home.js, or `{ error }`
- * @returns {string} one short sentence
+ * @returns {string} one short sentence, or nothing for a quiet scene that worked
  */
 const answer = (command, outcome) => {
 	const name = capital(command.target.say);
@@ -120,6 +120,11 @@ const answer = (command, outcome) => {
 		return `${name}: ${outcome.reached} of ${outcome.total} answered.`;
 	}
 	if (command.kind === "scene") {
+		// A quiet scene says nothing when it worked. Something else is
+		// speaking at that moment, such as a special day's line.
+		if (command.target.quiet) {
+			return "";
+		}
 		return command.target.done || `${name} is set.`;
 	}
 	if (command.kind === "level") {

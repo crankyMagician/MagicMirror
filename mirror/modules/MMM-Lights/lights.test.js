@@ -54,6 +54,10 @@ test("the answer reports what the lights did, not what was asked", () => {
 	const christmas = { kind: "scene", key: "christmas", target: { say: "christmas lights", entity: "script.christmas_lights_on", done: "Christmas lights are on." }, want: null };
 	assert.equal(answer(christmas, { total: 21, reached: 21 }), "Christmas lights are on.");
 	assert.equal(answer(christmas, { total: 21, reached: 19 }), "Christmas lights: 19 of 21 answered.");
+	const quiet = { ...christmas, target: { ...christmas.target, quiet: true } };
+	assert.equal(answer(quiet, { total: 21, reached: 21 }), "");
+	assert.equal(answer(quiet, { total: 21, reached: 19 }), "Christmas lights: 19 of 21 answered.");
+	assert.equal(answer(quiet, { error: "unreachable" }), "I could not reach the house controls.");
 	assert.equal(answer(on, { total: 2, reached: 1 }), "Bedroom lights: 1 of 2 answered.");
 	assert.equal(answer(on, { total: 2, reached: 0 }), "Bedroom lights did not answer.");
 	assert.equal(answer(on, { error: "unreachable" }), "I could not reach the house controls.");

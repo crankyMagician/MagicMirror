@@ -92,24 +92,36 @@ const lights = {
 // A scene's name alone is its command. The entity is a scene or a script in
 // Home Assistant. `also` lists more ways to say it, `members` are the lights
 // counted after a script has started, and `done` is what the mirror says.
-// The Christmas scripts turn every light red and green and put the lights
-// back afterwards. What plays is decided in the scripts in Home Assistant.
-const christmasRooms = Object.values(lights).map((light) => light.entity);
+// A holiday show is a script in Home Assistant that turns every light to that
+// holiday's colors. What plays is decided there, and one script puts the
+// lights back whichever show is on.
+const everyRoom = Object.values(lights).map((light) => light.entity);
+const show = (key, say, also = []) => ({
+	say: text(say, " lights"),
+	also: [text("turn on the ", say, " lights"), ...also.map((name) => text(name, " lights"))],
+	entity: text("script.", key, "_lights_on"),
+	members: everyRoom,
+	done: text(say.charAt(0).toUpperCase(), say.slice(1), " lights are on.")
+});
 const scenes = {
 	bedroom_evening: { say: "bedroom evening", entity: "scene.bedroom_evening" },
-	christmas: {
-		say: "christmas lights",
-		also: ["christmas lights on", "turn on the christmas lights"],
-		entity: "script.christmas_lights_on",
-		members: christmasRooms,
-		done: "Christmas lights are on."
-	},
+	christmas: { ...show("christmas", "christmas"), also: ["christmas lights on", "turn on the christmas lights"] },
+	thanksgiving: show("thanksgiving", "thanksgiving"),
+	hanukkah: show("hanukkah", "hanukkah", ["snow", "blue and white"]),
+	candy_cane: show("candy_cane", "candy cane"),
+	new_year: show("new_year", "new year", ["gold"]),
+	party: show("party", "party", ["birthday"]),
+	valentine: show("valentine", "valentine", ["pink"]),
+	saint_patrick: show("saint_patrick", "saint patrick", ["green and gold"]),
+	easter: show("easter", "easter", ["pastel"]),
+	patriotic: show("patriotic", "fourth of july", ["red white and blue"]),
+	halloween: show("halloween", "halloween", ["orange and purple"]),
 	christmas_off: {
 		say: "christmas lights off",
-		also: ["turn off the christmas lights"],
+		also: ["turn off the christmas lights", "holiday lights off", "lights back to normal"],
 		entity: "script.christmas_lights_off",
-		members: christmasRooms,
-		done: "Christmas lights are off."
+		members: everyRoom,
+		done: "The lights are back to normal."
 	}
 };
 // Spoken name -> key, the form MMM-Voice builds its phrases from.
