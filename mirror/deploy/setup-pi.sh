@@ -47,7 +47,7 @@ apt_get install --no-install-recommends \
 	libgtk-3-0t64 libnss3 libasound2t64 libxss1 libxtst6 libnotify4 \
 	fonts-dejavu-core fonts-noto-color-emoji \
 	avahi-daemon dbus-user-session \
-	python3-venv v4l-utils alsa-utils libatomic1
+	python3-venv v4l-utils alsa-utils libatomic1 ffmpeg
 
 echo "==> MagicMirror dependencies"
 as_user "cd '$MM_DIR' && npm run install-mm"
