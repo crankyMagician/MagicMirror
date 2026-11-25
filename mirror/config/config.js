@@ -91,8 +91,9 @@ const lights = {
 // A scene's name alone is its command. The entity is a scene or a script in
 // Home Assistant. `also` lists more ways to say it, `members` are the lights
 // counted after a script has started, and `done` is what the mirror says.
-// The Christmas scripts play each Govee bulb's own Christmas effect and put
-// the bulbs back afterwards. The bedroom bulbs have no such effect.
+// The Christmas scripts turn the Govee bulbs red and green and put them back
+// afterwards. What plays is decided in the scripts in Home Assistant. The
+// bedroom bulbs are not Govee bulbs and take no part.
 const christmasRooms = ["living", "kitchen", "dining", "nook", "stairwell", "landing", "office"].map((key) => lights[key].entity);
 const scenes = {
 	bedroom_evening: { say: "bedroom evening", entity: "scene.bedroom_evening" },

@@ -262,7 +262,7 @@ journalctl -t magicmirror | grep MMM-Household
 | "Mirror, turn off the bedroom lights"             | The lights go off                                            |
 | "Mirror, set the bedroom lights to fifty percent" | Ten, twenty five, fifty, seventy five or one hundred percent |
 | "Mirror, bedroom evening"                         | Sets the scene of that name                                  |
-| "Mirror, christmas lights"                        | Every Govee bulb plays its own Christmas effect              |
+| "Mirror, christmas lights"                        | The Govee bulbs go red and green and swap every minute       |
 | "Mirror, christmas lights off"                    | Puts those bulbs back the way they were                      |
 
 The rooms are the bedroom, living room, kitchen, dining room, nook, stairwell, landing and office, each said with "lights" after it: "Mirror, turn off the kitchen lights".
@@ -271,7 +271,7 @@ A command always names the state it wants, so a command the microphone hears twi
 
 The lights and scenes the mirror may use are the `lights` and `scenes` lists at the top of `config.js`. Each has the name people say, and a light can be a single bulb or a group in Home Assistant. The helper takes the lists from the server's config and accepts only a command id from the page, so the page cannot name another device. To add a room, make a light group in Home Assistant, add it to `lights`, and check its words with `voice.py --check-words`.
 
-An entry in `scenes` can also name a Home Assistant script, which is how the Christmas lights work: `script.christmas_lights_on` remembers what the Govee bulbs are doing and starts the effect, and `script.christmas_lights_off` restores them. A script entry lists the lights to count afterwards in `members`, more ways to say it in `also`, and the mirror's answer in `done`. The helper starts only a scene or a script, and only one that the config lists. "Turn on the christmas lights" and "turn off the christmas lights" work too.
+An entry in `scenes` can also name a Home Assistant script, which is how the Christmas lights work: `script.christmas_lights_on` remembers what the Govee bulbs are doing and starts `script.christmas_lights_cycle`, which sets half of them red and half green and swaps the two every minute. `script.christmas_lights_off` stops the cycle and restores the bulbs. What plays is decided in those scripts in Home Assistant, so it can change without a change here. Govee allows 10,000 requests a day, which is why the swap is slow. A script entry lists the lights to count afterwards in `members`, more ways to say it in `also`, and the mirror's answer in `done`. The helper starts only a scene or a script, and only one that the config lists. "Turn on the christmas lights" and "turn off the christmas lights" work too.
 
 `MIRROR_HA_URL` in `config.env` is Home Assistant's address and `SECRET_HA_TOKEN` is a long-lived access token of a Home Assistant user made for the mirror, so Home Assistant's logbook tells the mirror's commands from a person's. The token stays in the node helper. With the address empty the mirror has no light commands and no card.
 
