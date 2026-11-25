@@ -166,6 +166,12 @@ MIRROR_SPECIAL_DAYS='[{"date": "12-25", "person": "heather", "line": "Merry Chri
 
 The date is `MM-DD` for every year or `YYYY-MM-DD` for one year. An entry without a person is for everyone, and each person gets it once. An anniversary can count its years: give `"since": 2020` and write `{years}` in the line.
 
+An entry can also cover a season. Give `"from"` and `"to"` as `MM-DD` in place of the date, and each person hears it once on every day of the season. `"lines"` in place of `"line"` is a list that takes turns by day, and `"until": "12-25"` turns `{days}` in a line into the days left, as "30 days" or "1 day". A countdown says nothing on the day it counts down to. This is a holiday greeting:
+
+```sh
+MIRROR_SPECIAL_DAYS='[{"from": "11-25", "to": "12-24", "until": "12-25", "lines": ["Happy holidays. {days} until Christmas.", "{days} until Christmas."]}]'
+```
+
 No directory module does this. The voice assistants there (`MMM-AssistantMk2`, `MMM-GoogleAssistant`) send audio to Google and answer from Google's data, and the mirror's own modules already hold everything a briefing needs.
 
 ## Who sees what

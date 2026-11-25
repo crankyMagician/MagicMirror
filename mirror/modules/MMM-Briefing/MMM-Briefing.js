@@ -32,6 +32,8 @@ Module.register("MMM-Briefing", {
 		people: {},
 		// Entries as { date, person, line }. The date is "MM-DD" for every year
 		// or "YYYY-MM-DD" for one year. Leave out the person to greet everyone.
+		// A season has `from` and `to` in place of the date, may give `lines`
+		// that take turns by day, and `until` for "{days}" left to a date.
 		specialDays: [],
 		// Seconds a special message stays on screen.
 		displaySeconds: 90,

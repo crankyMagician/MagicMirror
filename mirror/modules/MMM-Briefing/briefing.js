@@ -210,27 +210,64 @@
 		return parts.filter(Boolean).join(" ");
 	};
 
+	// Tells whether a month and day fall in a season given as "MM-DD" to
+	// "MM-DD", both ends included. A season may run over the new year.
+	const inSeason = (entry, monthDay) => {
+		if (typeof entry.from !== "string" || typeof entry.to !== "string") {
+			return false;
+		}
+		return entry.from <= entry.to ? monthDay >= entry.from && monthDay <= entry.to : monthDay >= entry.from || monthDay <= entry.to;
+	};
+
+	// Days from today to the next "MM-DD", or null when that is not a date.
+	const daysUntil = (monthDay, now) => {
+		const [month, day] = String(monthDay).split("-").map(Number);
+		if (!Number.isInteger(month) || !Number.isInteger(day)) {
+			return null;
+		}
+		const thisYear = new Date(now.getFullYear(), month - 1, day).getTime();
+		const target = thisYear < startOfDay(now) ? new Date(now.getFullYear() + 1, month - 1, day).getTime() : thisYear;
+		return Math.round((target - startOfDay(now)) / DAY);
+	};
+
 	/**
 	 * Finds the special messages for a person on a day.
 	 * @param {object[]} days entries as { date, person, line }. The date is
 	 *   "MM-DD" for every year or "YYYY-MM-DD" for one year. An entry without
-	 *   a person is for everyone.
+	 *   a person is for everyone. In place of a date, `from` and `to` ("MM-DD")
+	 *   make the entry count on every day of a season. `lines` in place of
+	 *   `line` gives the days of a season a line each, in turn. `until`
+	 *   ("MM-DD") makes "{days}" in a line the days left to that date.
 	 * @param {string} person the recognized person
 	 * @param {Date} now the current time
 	 * @returns {object[]} matching entries as { key, line }
 	 */
 	const specialFor = (days, person, now) => {
 		const full = localDay(now);
+		const turn = Math.round(startOfDay(now) / DAY);
 		return (Array.isArray(days) ? days : [])
 			.map((entry, index) => ({ entry, index }))
-			.filter(({ entry }) => entry && typeof entry.line === "string" && entry.line.trim() !== "")
-			.filter(({ entry }) => entry.date === full || entry.date === full.slice(5))
+			.filter(({ entry }) => entry && (entry.date === full || entry.date === full.slice(5) || inSeason(entry, full.slice(5))))
 			.filter(({ entry }) => !entry.person || entry.person === person)
+			.map(({ entry, index }) => ({ entry, index, text: Array.isArray(entry.lines) && entry.lines.length > 0 ? entry.lines[turn % entry.lines.length] : entry.line }))
+			.filter(({ text }) => typeof text === "string" && text.trim() !== "")
 			// An anniversary gives the year it counts from, and "{years}" in its
 			// line becomes the count. It says nothing in that first year.
-			.map(({ entry, index }) => ({ entry, index, years: Number.isInteger(entry.since) ? now.getFullYear() - entry.since : null }))
+			.map((found) => ({ ...found, years: Number.isInteger(found.entry.since) ? now.getFullYear() - found.entry.since : null }))
 			.filter(({ years }) => years === null || years > 0)
-			.map(({ entry, index, years }) => ({ key: `${full}.${person}.${index}`, line: entry.line.trim().replaceAll("{years}", years === null ? "" : String(years)).replace(/\s+/g, " ").trim() }));
+			// A countdown says nothing on the day it counts down to. That day
+			// has a line of its own.
+			.map((found) => ({ ...found, left: found.entry.until ? daysUntil(found.entry.until, now) : null }))
+			.filter(({ left }) => left === null || left > 0)
+			.map(({ index, text, years, left }) => ({
+				key: `${full}.${person}.${index}`,
+				line: text
+					.trim()
+					.replaceAll("{years}", years === null ? "" : String(years))
+					.replaceAll("{days}", left === null ? "" : plural(left, "day"))
+					.replace(/\s+/g, " ")
+					.trim()
+			}));
 	};
 
 	const api = { briefing, nextLine, partOfDay, skyWord, specialFor, spokenTime, tasksLine, todayLine, upcoming, weatherLine, whenWords };

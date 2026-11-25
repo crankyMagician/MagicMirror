@@ -103,3 +103,28 @@ test("specialFor counts the years of an anniversary", () => {
 	// Without a starting year the placeholder is dropped.
 	assert.deepEqual(specialFor([{ date: "02-24", line: "Happy {years} anniversary." }], "sam", new Date(2027, 1, 24, 9)), [{ key: "2027-02-24.sam.0", line: "Happy anniversary." }]);
 });
+
+test("specialFor says a season's lines in turn and counts the days left", () => {
+	const days = [{ from: "11-25", to: "12-24", until: "12-25", lines: ["{days} until Christmas.", "Happy holidays. {days} to go."] }];
+	const first = specialFor(days, "sam", new Date(2026, 10, 25, 8));
+	const second = specialFor(days, "sam", new Date(2026, 10, 26, 8));
+	assert.equal(first.length, 1);
+	assert.equal(first[0].key, "2026-11-25.sam.0");
+	assert.ok(first[0].line.includes("30 days"));
+	assert.ok(second[0].line.includes("29 days"));
+	assert.notEqual(first[0].line.replace("30", ""), second[0].line.replace("29", ""));
+	assert.ok(specialFor(days, "heather", new Date(2026, 11, 24, 8))[0].line.includes("1 day "));
+	// Outside the season, and on the day itself, it says nothing.
+	assert.deepEqual(specialFor(days, "sam", new Date(2026, 10, 24, 8)), []);
+	assert.deepEqual(specialFor(days, "sam", new Date(2026, 11, 25, 8)), []);
+});
+
+test("specialFor follows a season over the new year", () => {
+	const days = [
+		{ from: "12-26", to: "01-01", until: "01-01", line: "{days} left in the year." },
+		{ from: "12-26", to: "01-01", person: "heather", line: "Happy holidays, Heather." }
+	];
+	assert.deepEqual(specialFor(days, "sam", new Date(2026, 11, 30, 8)), [{ key: "2026-12-30.sam.0", line: "2 days left in the year." }]);
+	assert.deepEqual(specialFor(days, "heather", new Date(2027, 0, 1, 8)), [{ key: "2027-01-01.heather.1", line: "Happy holidays, Heather." }]);
+	assert.deepEqual(specialFor(days, "sam", new Date(2027, 0, 2, 8)), []);
+});
