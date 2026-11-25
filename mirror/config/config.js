@@ -79,7 +79,14 @@ const artFrame = (person) => ({
 // and no light card.
 const homeUrl = process.env.MIRROR_HA_URL || "";
 const lights = {
-	bedroom: { label: "Bedroom", say: "bedroom lights", entity: "light.master_bedroom_lights" }
+	bedroom: { label: "Bedroom", say: "bedroom lights", entity: "light.master_bedroom_lights" },
+	living: { label: "Living room", say: "living room lights", entity: "light.living_room_lights" },
+	kitchen: { label: "Kitchen", say: "kitchen lights", entity: "light.kitchen_lights" },
+	dining: { label: "Dining room", say: "dining room lights", entity: "light.dining_room_lights" },
+	nook: { label: "Nook", say: "nook lights", entity: "light.nook_all_lights" },
+	stairwell: { label: "Stairwell", say: "stairwell lights", entity: "light.stairwell_lights" },
+	landing: { label: "Landing", say: "landing lights", entity: "light.landing_lights" },
+	office: { label: "Office", say: "office lights", entity: "light.upstairs_office_lights" }
 };
 const scenes = {
 	bedroom_evening: { say: "bedroom evening", entity: "scene.bedroom_evening" }
@@ -386,7 +393,9 @@ const config = {
 					classes: "sam heather feature-lights",
 					header: "Lights",
 					position: "top_right",
-					config: { url: homeUrl, lights, scenes }
+					// The Govee rooms answer through Govee's servers, six to eight
+					// seconds after a command. A light that answers sooner is not kept waiting.
+					config: { url: homeUrl, lights, scenes, confirmSeconds: 12 }
 				}
 			]
 			: []),
