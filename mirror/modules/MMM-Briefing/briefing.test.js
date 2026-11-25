@@ -128,3 +128,14 @@ test("specialFor follows a season over the new year", () => {
 	assert.deepEqual(specialFor(days, "heather", new Date(2027, 0, 1, 8)), [{ key: "2027-01-01.heather.1", line: "Happy holidays, Heather." }]);
 	assert.deepEqual(specialFor(days, "sam", new Date(2027, 0, 2, 8)), []);
 });
+
+test("specialFor passes a scene along with its line", () => {
+	const days = [
+		{ date: "12-25", line: "Merry Christmas.", scene: "christmas_morning" },
+		{ date: "12-25", person: "sam", line: "Good morning.", scene: "" }
+	];
+	assert.deepEqual(specialFor(days, "sam", new Date(2026, 11, 25, 8)), [
+		{ key: "2026-12-25.sam.0", scene: "christmas_morning", line: "Merry Christmas." },
+		{ key: "2026-12-25.sam.1", line: "Good morning." }
+	]);
+});

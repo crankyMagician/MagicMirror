@@ -67,7 +67,10 @@ module.exports = NodeHelper.create({
 		}
 		this.busy.delete(command.key);
 		Log.log(`Light command ${id}: ${outcome.error || `${outcome.reached} of ${outcome.total} answered`}`);
-		this.sendSocketNotification("SAY", { id: `lights-${Date.now()}`, text: answer(command, outcome) });
+		const text = answer(command, outcome);
+		if (text) {
+			this.sendSocketNotification("SAY", { id: `lights-${Date.now()}`, text });
+		}
 		this.report();
 	},
 

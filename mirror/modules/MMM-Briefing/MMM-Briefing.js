@@ -34,6 +34,7 @@ Module.register("MMM-Briefing", {
 		// or "YYYY-MM-DD" for one year. Leave out the person to greet everyone.
 		// A season has `from` and `to` in place of the date, may give `lines`
 		// that take turns by day, and `until` for "{days}" left to a date.
+		// `scene` names a scene of MMM-Lights to set when the line is said.
 		specialDays: [],
 		// Seconds a special message stays on screen.
 		displaySeconds: 90,
@@ -124,6 +125,11 @@ Module.register("MMM-Briefing", {
 		pending.forEach((entry) => {
 			this.markSaid(entry.key);
 			this.sendNotification("TTS_SAY", { text: entry.line, id: `special-${entry.key}` });
+			// MMM-Lights takes this the way it takes a spoken command, and
+			// sets the scene only when its own config lists it.
+			if (entry.scene) {
+				this.sendNotification("VOICE_COMMAND", { id: `light:scene:${entry.scene}` });
+			}
 		});
 		this.message = pending.map((entry) => entry.line);
 		this.updateDom(1000);

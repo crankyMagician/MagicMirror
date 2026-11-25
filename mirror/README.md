@@ -269,7 +269,8 @@ journalctl -t magicmirror | grep MMM-Household
 | "Mirror, set the bedroom lights to fifty percent" | Ten, twenty five, fifty, seventy five or one hundred percent |
 | "Mirror, bedroom evening"                         | Sets the scene of that name                                  |
 | "Mirror, christmas lights"                        | Every light goes red or green and keeps switching            |
-| "Mirror, christmas lights off"                    | Puts the lights back the way they were                       |
+| "Mirror, thanksgiving lights"                     | The same for another holiday, in its colors (list below)     |
+| "Mirror, lights back to normal"                   | Puts the lights back the way they were                       |
 
 The rooms are the bedroom, living room, kitchen, dining room, nook, stairwell, landing, office and guest room, each said with "lights" after it: "Mirror, turn off the kitchen lights".
 
@@ -277,7 +278,11 @@ A command always names the state it wants, so a command the microphone hears twi
 
 The lights and scenes the mirror may use are the `lights` and `scenes` lists at the top of `config.js`. Each has the name people say, and a light can be a single bulb or a group in Home Assistant. The helper takes the lists from the server's config and accepts only a command id from the page, so the page cannot name another device. To add a room, make a light group in Home Assistant, add it to `lights`, and check its words with `voice.py --check-words`.
 
-An entry in `scenes` can also name a Home Assistant script, which is how the Christmas lights work: `script.christmas_lights_on` remembers what every light is doing and turns the lights red and green, and `script.christmas_lights_off` restores them. What plays, and how fast, is decided in those scripts in Home Assistant, so it can change without a change here. A script entry lists the lights to count afterwards in `members`, more ways to say it in `also`, and the mirror's answer in `done`. The helper starts only a scene or a script, and only one that the config lists. "Turn on the christmas lights" and "turn off the christmas lights" work too.
+An entry in `scenes` can also name a Home Assistant script, which is how the holiday lights work. Each show is a script there that remembers what every light is doing and turns the lights to that holiday's colors, and `script.christmas_lights_off` puts them back whichever show is on. What plays, and how fast, is decided in those scripts, so it can change without a change here. A script entry lists the lights to count afterwards in `members`, more ways to say it in `also`, and the mirror's answer in `done`. With `quiet: true` the mirror says nothing when the scene worked. The helper starts only a scene or a script, and only one that the config lists.
+
+The shows, each said as "NAME lights" or "turn on the NAME lights": christmas, thanksgiving, hanukkah (also snow, blue and white), candy cane, new year (also gold), party (also birthday), valentine (also pink), saint patrick (also green and gold), easter (also pastel), fourth of july (also red white and blue), halloween (also orange and purple). "Christmas lights off", "holiday lights off" and "lights back to normal" all end a show.
+
+A special day can set a scene too. Give its entry `"scene": "KEY"`, and when the line is spoken `MMM-Briefing` sends the command `light:scene:KEY`, which `MMM-Lights` carries out if its config lists that scene.
 
 `MIRROR_HA_URL` in `config.env` is Home Assistant's address and `SECRET_HA_TOKEN` is a long-lived access token of a Home Assistant user made for the mirror, so Home Assistant's logbook tells the mirror's commands from a person's. The token stays in the node helper. With the address empty the mirror has no light commands and no card.
 
