@@ -86,15 +86,15 @@ const lights = {
 	nook: { label: "Nook", say: "nook lights", entity: "light.nook_all_lights" },
 	stairwell: { label: "Stairwell", say: "stairwell lights", entity: "light.stairwell_lights" },
 	landing: { label: "Landing", say: "landing lights", entity: "light.landing_lights" },
-	office: { label: "Office", say: "office lights", entity: "light.upstairs_office_lights" }
+	office: { label: "Office", say: "office lights", entity: "light.upstairs_office_lights" },
+	guest: { label: "Guest room", say: "guest room lights", entity: "light.guest_room_lights" }
 };
 // A scene's name alone is its command. The entity is a scene or a script in
 // Home Assistant. `also` lists more ways to say it, `members` are the lights
 // counted after a script has started, and `done` is what the mirror says.
-// The Christmas scripts turn the Govee bulbs red and green and put them back
-// afterwards. What plays is decided in the scripts in Home Assistant. The
-// bedroom bulbs are not Govee bulbs and take no part.
-const christmasRooms = ["living", "kitchen", "dining", "nook", "stairwell", "landing", "office"].map((key) => lights[key].entity);
+// The Christmas scripts turn every light red and green and put the lights
+// back afterwards. What plays is decided in the scripts in Home Assistant.
+const christmasRooms = Object.values(lights).map((light) => light.entity);
 const scenes = {
 	bedroom_evening: { say: "bedroom evening", entity: "scene.bedroom_evening" },
 	christmas: {
