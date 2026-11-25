@@ -19,7 +19,7 @@ const pause = (ms) => new Promise((resolve) => {
  * @param {function(string, object): Promise<object>} [options.fetch] stands in for fetch in tests
  * @param {function(number): Promise} [options.wait] stands in for a pause in tests
  * @param {function(): number} [options.now] the clock, in milliseconds
- * @returns {object} `ready()`, `read(entity)`, `apply(entity, want, seconds)` and `scene(entity)`
+ * @returns {object} `ready()`, `read(entity)`, `apply(entity, want, seconds)` and `scene(entity, members)`
  */
 const createHome = ({ url, env = process.env, fetch: request = fetch, wait = pause, now = Date.now }) => {
 	const base = String(url || "").replace(/\/+$/, "");
@@ -113,21 +113,25 @@ const createHome = ({ url, env = process.env, fetch: request = fetch, wait = pau
 	};
 
 	/**
-	 * Sets a scene. A scene does not report back, so this counts the lights
-	 * in it that are answering afterwards.
-	 * @param {string} entity the scene
+	 * Sets a scene or starts a script. Neither reports back, so this counts
+	 * the lights that are answering afterwards: the scene's own lights, or
+	 * the lights the config lists for a script.
+	 * @param {string} entity the scene or the script
+	 * @param {string[]} [members] lights or groups to count in place of the scene's own
 	 * @returns {Promise<object>} `{ total, reached }`, or `{ error: "unknown" }`
 	 */
-	const scene = async (entity) => {
-		if (await ask("GET", `/api/states/${entity}`) === null) {
+	const scene = async (entity, members) => {
+		const [domain] = String(entity).split(".");
+		if (!["scene", "script"].includes(domain) || await ask("GET", `/api/states/${entity}`) === null) {
 			return { error: "unknown" };
 		}
-		await ask("POST", "/api/services/scene/turn_on", { entity_id: entity });
+		await ask("POST", `/api/services/${domain}/turn_on`, { entity_id: entity });
 		await wait(1500);
-		const lights = await read(entity);
-		if (!lights) {
+		const groups = await Promise.all((Array.isArray(members) && members.length > 0 ? members : [entity]).map(read));
+		if (groups.includes(null)) {
 			return { error: "unknown" };
 		}
+		const lights = groups.flat();
 		return { total: lights.length, reached: lights.filter((light) => light.available).length };
 	};
 

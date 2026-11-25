@@ -7,9 +7,10 @@ const GROUP = "light.master_bedroom_lights";
 const ONE = "light.bulb_one";
 const TWO = "light.bulb_two";
 const SCENE = "scene.bedroom_evening";
+const SCRIPT = "script.christmas_lights_on";
 
 /**
- * Stands in for Home Assistant: two bulbs, a group of both and a scene.
+ * Stands in for Home Assistant: two bulbs, a group of both, a scene and a script.
  * @param {object} [options] how the stand-in behaves
  * @param {string[]} [options.dead] bulbs that are off at the wall
  * @param {number} [options.lag] reads of a bulb that still show the old state after a call
@@ -46,6 +47,9 @@ const setup = ({ dead = [], lag = 0, callStatus = 200, down = false } = {}) => {
 		const entity = path.replace("/api/states/", "");
 		if (entity === GROUP || entity === SCENE) {
 			return reply(200, { state: "on", attributes: { entity_id: [ONE, TWO] } });
+		}
+		if (entity === SCRIPT) {
+			return reply(200, { state: "off", attributes: { mode: "single" } });
 		}
 		if (!bulbs[entity]) {
 			return reply(404, { message: "Entity not found." });
@@ -121,6 +125,20 @@ test("a scene is set and the answering lights in it are counted", async () => {
 	const { home, calls } = setup({ dead: [TWO] });
 	assert.deepEqual(await home.scene(SCENE), { total: 2, reached: 1 });
 	assert.deepEqual(calls.find((call) => call.method === "POST"), { method: "POST", path: "/api/services/scene/turn_on", body: { entity_id: SCENE }, authorization: "Bearer token-1" });
+});
+
+test("a script is started and the lights the config lists for it are counted", async () => {
+	const { home, calls } = setup({ dead: [TWO] });
+	assert.deepEqual(await home.scene(SCRIPT, [GROUP]), { total: 2, reached: 1 });
+	assert.deepEqual(calls.find((call) => call.method === "POST"), { method: "POST", path: "/api/services/script/turn_on", body: { entity_id: SCRIPT }, authorization: "Bearer token-1" });
+	assert.deepEqual(await home.scene(SCRIPT, [GROUP, "light.nowhere"]), { error: "unknown" });
+});
+
+test("only a scene or a script can be started by name", async () => {
+	const { home, calls } = setup();
+	assert.deepEqual(await home.scene(ONE), { error: "unknown" });
+	assert.deepEqual(await home.scene("automation.anything"), { error: "unknown" });
+	assert.equal(calls.some((call) => call.method === "POST"), false);
 });
 
 test("an unreachable Home Assistant is an error for the caller to report", async () => {

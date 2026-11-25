@@ -8,7 +8,10 @@ const DEFAULTS = {
 	// label is for the card, `say` is how the mirror names it aloud, and the
 	// entity is a light or a group of lights in Home Assistant.
 	lights: {},
-	// The scenes the mirror may set, by key: { say, entity }.
+	// The scenes the mirror may set, by key: { say, entity }. The entity is
+	// a scene or a script in Home Assistant. A script names the lights to
+	// count afterwards in `members`, and `done` is said in place of
+	// "NAME is set".
 	scenes: {},
 	// Seconds between looks at the lights for the card.
 	pollSeconds: 20,
@@ -117,7 +120,7 @@ const answer = (command, outcome) => {
 		return `${name}: ${outcome.reached} of ${outcome.total} answered.`;
 	}
 	if (command.kind === "scene") {
-		return `${name} is set.`;
+		return command.target.done || `${name} is set.`;
 	}
 	if (command.kind === "level") {
 		return `${name} at ${command.want.level} percent.`;
