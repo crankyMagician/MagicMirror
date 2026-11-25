@@ -263,6 +263,8 @@ journalctl -t magicmirror | grep MMM-Household
 | "Mirror, set the bedroom lights to fifty percent" | Ten, twenty five, fifty, seventy five or one hundred percent |
 | "Mirror, bedroom evening"                         | Sets the scene of that name                                  |
 
+The rooms are the bedroom, living room, kitchen, dining room, nook, stairwell, landing and office, each said with "lights" after it: "Mirror, turn off the kitchen lights".
+
 A command always names the state it wants, so a command the microphone hears twice does nothing the second time. After a command the helper asks Home Assistant what each bulb reports and the mirror says that: "Bedroom lights on", "Bedroom lights: 1 of 2 answered" when a bulb is off at the wall, or "I could not reach the house controls". It never answers from the words alone.
 
 The lights and scenes the mirror may use are the `lights` and `scenes` lists at the top of `config.js`. Each has the name people say, and a light can be a single bulb or a group in Home Assistant. The helper takes the lists from the server's config and accepts only a command id from the page, so the page cannot name another device. To add a room, make a light group in Home Assistant, add it to `lights`, and check its words with `voice.py --check-words`.
