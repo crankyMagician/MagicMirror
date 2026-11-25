@@ -1,0 +1,21 @@
+.MMM-Lights .lights-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.MMM-Lights .lights-label {
+  text-align: left;
+}
+
+.MMM-Lights .lights-status {
+  text-align: right;
+}
+
+.MMM-Lights .lights-on .lights-status {
+  color: var(--color-text-bright);
+}
+
+.MMM-Lights .lights-off,
+.MMM-Lights .lights-missing {
+  color: var(--color-text-dimmed);
+}

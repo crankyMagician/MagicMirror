@@ -252,6 +252,25 @@ curl http://localhost:8081/api/status
 journalctl -t magicmirror | grep MMM-Household
 ```
 
+## Lights
+
+`MMM-Lights` switches the household's lights by voice through Home Assistant, which runs on another machine in the house, and shows a card with what each light is doing.
+
+| Say                                               | What happens                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------ |
+| "Mirror, turn on the bedroom lights"              | The lights come on. "Bedroom lights on" means the same       |
+| "Mirror, turn off the bedroom lights"             | The lights go off                                            |
+| "Mirror, set the bedroom lights to fifty percent" | Ten, twenty five, fifty, seventy five or one hundred percent |
+| "Mirror, bedroom evening"                         | Sets the scene of that name                                  |
+
+A command always names the state it wants, so a command the microphone hears twice does nothing the second time. After a command the helper asks Home Assistant what each bulb reports and the mirror says that: "Bedroom lights on", "Bedroom lights: 1 of 2 answered" when a bulb is off at the wall, or "I could not reach the house controls". It never answers from the words alone.
+
+The lights and scenes the mirror may use are the `lights` and `scenes` lists at the top of `config.js`. Each has the name people say, and a light can be a single bulb or a group in Home Assistant. The helper takes the lists from the server's config and accepts only a command id from the page, so the page cannot name another device. To add a room, make a light group in Home Assistant, add it to `lights`, and check its words with `voice.py --check-words`.
+
+`MIRROR_HA_URL` in `config.env` is Home Assistant's address and `SECRET_HA_TOKEN` is a long-lived access token of a Home Assistant user made for the mirror, so Home Assistant's logbook tells the mirror's commands from a person's. The token stays in the node helper. With the address empty the mirror has no light commands and no card.
+
+The module directory has several Home Assistant modules. They show sensor values or need a touch screen, and none takes a spoken command and reports back, so this one is our own. It keeps no copy of a light's state: the card and every answer are read from Home Assistant when they are needed.
+
 ## Install on the Pi
 
 The target is Ubuntu Server 24.04 (arm64) on a Raspberry Pi 4.

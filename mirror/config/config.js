@@ -72,6 +72,21 @@ const artFrame = (person) => ({
 	}
 });
 
+// The lights and scenes the mirror may use, through Home Assistant. `say` is
+// the name people speak and the mirror says back, `label` is the name on the
+// card, and the entity is a light or a group of lights in Home Assistant.
+// With MIRROR_HA_URL empty in config.env the mirror has no light commands
+// and no light card.
+const homeUrl = process.env.MIRROR_HA_URL || "";
+const lights = {
+	bedroom: { label: "Bedroom", say: "bedroom lights", entity: "light.master_bedroom_lights" }
+};
+const scenes = {
+	bedroom_evening: { say: "bedroom evening", entity: "scene.bedroom_evening" }
+};
+// Spoken name -> key, the form MMM-Voice builds its phrases from.
+const spoken = (things) => Object.fromEntries(Object.entries(homeUrl ? things : {}).map(([key, thing]) => [thing.say, key]));
+
 const config = {
 	// MagicMirror answers only on the Pi itself. The settings page that phones
 	// open is served separately by MMM-Household (see settingsPort below).
@@ -131,6 +146,7 @@ const config = {
 					photos: "Photos",
 					art: "Art",
 					unifi: "Network devices",
+					lights: "Lights",
 					"MMM-MoonPhase": "Moon",
 					"MMM-APOD": "Space picture",
 					"MMM-CoupleDays": "Days together",
@@ -151,7 +167,8 @@ const config = {
 			config: {
 				// Command -> the phrases that trigger it, after the wake word.
 				// MMM-Household acts on the first three and MMM-Briefing answers
-				// the rest aloud.
+				// the rest aloud. MMM-Lights acts on the light commands, which
+				// are built from `lights` and `scenes` below.
 				commands: {
 					wake_up: ["wake up"],
 					good_night: ["good night"],
@@ -184,8 +201,13 @@ const config = {
 					pokemon: "MMM-DailyPokemon",
 					"word of the day": "MMM-WordOfTheDay",
 					history: "MMM-History",
-					"space picture": "MMM-APOD"
-				}
+					"space picture": "MMM-APOD",
+					...(homeUrl ? { lights: "lights" } : {})
+				},
+				// "Turn on the NAME", "turn off the NAME", "set the NAME to fifty
+				// percent", and a scene by its name.
+				lights: spoken(lights),
+				scenes: spoken(scenes)
 			}
 		},
 		{
@@ -355,6 +377,19 @@ const config = {
 				rotationInterval: 12000
 			}
 		},
+		// The lights the mirror can switch by voice, and what they are doing.
+		// The Home Assistant token is SECRET_HA_TOKEN in config.env.
+		...(homeUrl
+			? [
+				{
+					module: "MMM-Lights",
+					classes: "sam heather feature-lights",
+					header: "Lights",
+					position: "top_right",
+					config: { url: homeUrl, lights, scenes }
+				}
+			]
+			: []),
 		photoFrame("sam"),
 		artFrame("heather"),
 		{
