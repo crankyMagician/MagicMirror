@@ -87,7 +87,8 @@ const lights = {
 	stairwell: { label: "Stairwell", say: "stairwell lights", entity: "light.stairwell_lights" },
 	landing: { label: "Landing", say: "landing lights", entity: "light.landing_lights" },
 	office: { label: "Office", say: "office lights", entity: "light.upstairs_office_lights" },
-	guest: { label: "Guest room", say: "guest room lights", entity: "light.guest_room_lights" }
+	guest: { label: "Guest room", say: "guest room lights", entity: "light.guest_room_lights" },
+	sitting: { label: "Sitting room", say: "sitting room lights", entity: "light.sitting_room_lights" }
 };
 // A scene's name alone is its command. The entity is a scene or a script in
 // Home Assistant. `also` lists more ways to say it, `members` are the lights
@@ -116,6 +117,13 @@ const scenes = {
 	easter: show("easter", "easter", ["pastel"]),
 	patriotic: show("patriotic", "fourth of july", ["red white and blue"]),
 	halloween: show("halloween", "halloween", ["orange and purple"]),
+	// Music: a script in Home Assistant starts a holiday station on the
+	// HomePods and the TVs and turns on a switch. MMM-Radio follows that
+	// switch and plays the station on the mirror's own speaker.
+	christmas_music: { say: "christmas music", also: ["play christmas music"], entity: "script.christmas_music_on", done: "Christmas music is playing." },
+	music_off: { say: "stop the music", also: ["christmas music off"], entity: "script.christmas_music_off", done: "The music is off." },
+	// Lights and music together. A special day's line starts it, so it is quiet.
+	christmas_morning: { say: "christmas morning", entity: "script.christmas_morning", quiet: true },
 	christmas_off: {
 		say: "christmas lights off",
 		also: ["turn off the christmas lights", "holiday lights off", "lights back to normal"],
@@ -429,6 +437,12 @@ const config = {
 					// The Govee rooms answer through Govee's servers, six to eight
 					// seconds after a command. A light that answers sooner is not kept waiting.
 					config: { url: homeUrl, lights, scenes, confirmSeconds: 12 }
+				},
+				// Plays the holiday station on the mirror's speaker while the
+				// switch in Home Assistant is on. It shows nothing.
+				{
+					module: "MMM-Radio",
+					config: { url: homeUrl, entity: "input_boolean.christmas_music", stream: process.env.MIRROR_RADIO_STREAM || "https://ice2.somafm.com/christmas-256-mp3", volume: 0.4 }
 				}
 			]
 			: []),

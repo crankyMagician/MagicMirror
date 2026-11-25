@@ -271,8 +271,10 @@ journalctl -t magicmirror | grep MMM-Household
 | "Mirror, christmas lights"                        | Every light goes red or green and keeps switching            |
 | "Mirror, thanksgiving lights"                     | The same for another holiday, in its colors (list below)     |
 | "Mirror, lights back to normal"                   | Puts the lights back the way they were                       |
+| "Mirror, christmas music"                         | A holiday station on the HomePods, the TVs and the mirror    |
+| "Mirror, stop the music"                          | Stops it everywhere                                          |
 
-The rooms are the bedroom, living room, kitchen, dining room, nook, stairwell, landing, office and guest room, each said with "lights" after it: "Mirror, turn off the kitchen lights".
+The rooms are the bedroom, living room, kitchen, dining room, nook, stairwell, landing, office, guest room and sitting room, each said with "lights" after it: "Mirror, turn off the kitchen lights".
 
 A command always names the state it wants, so a command the microphone hears twice does nothing the second time. After a command the helper asks Home Assistant what each bulb reports and the mirror says that: "Bedroom lights on", "Bedroom lights: 1 of 2 answered" when a bulb is off at the wall, or "I could not reach the house controls". It never answers from the words alone.
 
@@ -283,6 +285,14 @@ An entry in `scenes` can also name a Home Assistant script, which is how the hol
 The shows, each said as "NAME lights" or "turn on the NAME lights": christmas, thanksgiving, hanukkah (also snow, blue and white), candy cane, new year (also gold), party (also birthday), valentine (also pink), saint patrick (also green and gold), easter (also pastel), fourth of july (also red white and blue), halloween (also orange and purple). "Christmas lights off", "holiday lights off" and "lights back to normal" all end a show.
 
 A special day can set a scene too. Give its entry `"scene": "KEY"`, and when the line is spoken `MMM-Briefing` sends the command `light:scene:KEY`, which `MMM-Lights` carries out if its config lists that scene.
+
+### Music
+
+"Mirror, christmas music" runs `script.christmas_music_on` in Home Assistant, which starts a holiday radio station on the HomePods and the TVs and turns on the switch `input_boolean.christmas_music`. `MMM-Radio` looks at that switch every ten seconds, and right after a spoken command, and plays the same station on the mirror's own speaker with `ffmpeg` while the switch is on. So the Home Assistant app can start and stop the mirror's music too. Each player buffers by itself, and they are a second or two apart.
+
+The mirror has one speaker. When the mirror is about to speak, the radio stops, and it starts again when the line has ended. The microphone hears the music, so "mirror, stop the music" may need to be said loudly. The station is `MIRROR_RADIO_STREAM` in `config.env`, or SomaFM's Christmas Lounge when that is not set.
+
+The module directory has radio players: `MMM-MyRadio` (mpg123 with playlists and its own display), `MMM-MplayerRadio` (mplayer or VLC with playlists) and `MMM-InternetRadio` (drives station web pages). None follows a switch elsewhere or yields the speaker to a voice, and each would add a player the Pi does not have, so this is a small module of our own.
 
 `MIRROR_HA_URL` in `config.env` is Home Assistant's address and `SECRET_HA_TOKEN` is a long-lived access token of a Home Assistant user made for the mirror, so Home Assistant's logbook tells the mirror's commands from a person's. The token stays in the node helper. With the address empty the mirror has no light commands and no card.
 
