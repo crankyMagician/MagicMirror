@@ -59,7 +59,7 @@ module.exports = NodeHelper.create({
 		let outcome;
 		try {
 			outcome = command.kind === "scene"
-				? await this.home.scene(command.target.entity)
+				? await this.home.scene(command.target.entity, command.target.members)
 				: await this.home.apply(command.target.entity, command.want, this.config.confirmSeconds);
 		} catch (error) {
 			Log.warn(`Could not reach Home Assistant for ${id}: ${error.message}`);

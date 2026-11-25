@@ -88,11 +88,31 @@ const lights = {
 	landing: { label: "Landing", say: "landing lights", entity: "light.landing_lights" },
 	office: { label: "Office", say: "office lights", entity: "light.upstairs_office_lights" }
 };
+// A scene's name alone is its command. The entity is a scene or a script in
+// Home Assistant. `also` lists more ways to say it, `members` are the lights
+// counted after a script has started, and `done` is what the mirror says.
+// The Christmas scripts play each Govee bulb's own Christmas effect and put
+// the bulbs back afterwards. The bedroom bulbs have no such effect.
+const christmasRooms = ["living", "kitchen", "dining", "nook", "stairwell", "landing", "office"].map((key) => lights[key].entity);
 const scenes = {
-	bedroom_evening: { say: "bedroom evening", entity: "scene.bedroom_evening" }
+	bedroom_evening: { say: "bedroom evening", entity: "scene.bedroom_evening" },
+	christmas: {
+		say: "christmas lights",
+		also: ["christmas lights on", "turn on the christmas lights"],
+		entity: "script.christmas_lights_on",
+		members: christmasRooms,
+		done: "Christmas lights are on."
+	},
+	christmas_off: {
+		say: "christmas lights off",
+		also: ["turn off the christmas lights"],
+		entity: "script.christmas_lights_off",
+		members: christmasRooms,
+		done: "Christmas lights are off."
+	}
 };
 // Spoken name -> key, the form MMM-Voice builds its phrases from.
-const spoken = (things) => Object.fromEntries(Object.entries(homeUrl ? things : {}).map(([key, thing]) => [thing.say, key]));
+const spoken = (things) => Object.fromEntries(Object.entries(homeUrl ? things : {}).flatMap(([key, thing]) => [thing.say, ...thing.also || []].map((name) => [name, key])));
 
 const config = {
 	// MagicMirror answers only on the Pi itself. The settings page that phones

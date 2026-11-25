@@ -9,6 +9,7 @@
  *   "mirror, turn off the bedroom lights"      "Bedroom lights off."
  *   "mirror, set the bedroom lights to fifty percent"
  *   "mirror, bedroom evening"                  a scene, by its name
+ *   "mirror, christmas lights"                 a script, by its name
  *
  * A command always names the state it wants. Nothing toggles.
  *
