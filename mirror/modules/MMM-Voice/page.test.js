@@ -64,6 +64,9 @@ test("a miss says so and shows what it heard, but talk after an answer is left a
 	assert.ok(strip(document).classList.contains("voice-missed"));
 	assert.equal(words(document), "Sorry, I did not catch that. Did you say \"Good night\"?");
 
+	module.socketNotificationReceived("VOICE_EVENT", { type: "missed", text: "the can set on and purple help", why: "unknown", window: "wake" });
+	assert.equal(words(document), "Sorry, I did not catch that.");
+
 	module.socketNotificationReceived("VOICE_EVENT", { type: "missed", text: "", why: "unknown", window: "follow_up" });
 	assert.ok(strip(document).classList.contains("voice-waiting"));
 	clearTimeout(module.stateTimer);

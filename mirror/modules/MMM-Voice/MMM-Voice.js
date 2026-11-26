@@ -239,14 +239,11 @@ Module.register("MMM-Voice", {
 				this.show("waiting");
 				return;
 			}
-			const words = this.pretty(message.text);
-			let detail = "";
-			if (message.why === "low" && words) {
-				detail = ` Did you say "${words}"?`;
-			} else if (words) {
-				detail = ` I heard "${words}".`;
-			}
-			this.show("missed", `Sorry, I did not catch that.${detail}`, 4);
+			// The recognizer can only answer with words it was given, so an
+			// unknown sentence comes out as nonsense. Only a known command that
+			// was said unclearly is worth repeating back.
+			const words = message.why === "low" ? this.pretty(message.text) : "";
+			this.show("missed", words ? `Sorry, I did not catch that. Did you say "${words}"?` : "Sorry, I did not catch that.", 4);
 		}
 	},
 
