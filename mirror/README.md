@@ -271,10 +271,14 @@ journalctl -t magicmirror | grep MMM-Household
 | "Mirror, christmas lights"                        | Every light goes red or green and keeps switching            |
 | "Mirror, thanksgiving lights"                     | The same for another holiday, in its colors (list below)     |
 | "Mirror, lights back to normal"                   | Puts the lights back the way they were                       |
+| "Mirror, turn off the upstairs lights"            | A whole floor, upstairs or downstairs                        |
+| "Mirror, white lights"                            | Ends a show and turns the lights that are on to warm white   |
 | "Mirror, christmas music"                         | A holiday station on the HomePods, the TVs and the mirror    |
 | "Mirror, stop the music"                          | Stops it everywhere                                          |
 
 The rooms are the bedroom, living room, kitchen, dining room, nook, stairwell, landing, office, guest room and sitting room, each said with "lights" after it: "Mirror, turn off the kitchen lights".
+
+"Upstairs lights" and "downstairs lights" are groups of whole floors. They take every command a room takes and have no row on the card (`card: false`). A light switched off during a holiday show stays off, and "lights back to normal" puts back only the lights that are still on.
 
 A command always names the state it wants, so a command the microphone hears twice does nothing the second time. After a command the helper asks Home Assistant what each bulb reports and the mirror says that: "Bedroom lights on", "Bedroom lights: 1 of 2 answered" when a bulb is off at the wall, or "I could not reach the house controls". It never answers from the words alone.
 

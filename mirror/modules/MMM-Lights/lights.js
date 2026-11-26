@@ -6,7 +6,8 @@ const DEFAULTS = {
 	url: "",
 	// The lights the mirror may switch, by key: { label, say, entity }. The
 	// label is for the card, `say` is how the mirror names it aloud, and the
-	// entity is a light or a group of lights in Home Assistant.
+	// entity is a light or a group of lights in Home Assistant. With
+	// `card: false` a light takes commands and has no row on the card.
 	lights: {},
 	// The scenes the mirror may set, by key: { say, entity }. The entity is
 	// a scene or a script in Home Assistant. A script names the lights to

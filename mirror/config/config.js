@@ -97,6 +97,12 @@ const lights = {
 // holiday's colors. What plays is decided there, and one script puts the
 // lights back whichever show is on.
 const everyRoom = Object.values(lights).map((light) => light.entity);
+// Whole floors. They take the same commands as a room, and they stay off the
+// card, which shows the rooms.
+const floors = {
+	upstairs: { label: "Upstairs", say: "upstairs lights", entity: "light.upstairs_lights", card: false },
+	downstairs: { label: "Downstairs", say: "downstairs lights", entity: "light.downstairs_lights", card: false }
+};
 const show = (key, say, also = []) => ({
 	say: text(say, " lights"),
 	also: [text("turn on the ", say, " lights"), ...also.map((name) => text(name, " lights"))],
@@ -124,6 +130,8 @@ const scenes = {
 	music_off: { say: "stop the music", also: ["christmas music off"], entity: "script.christmas_music_off", done: "The music is off." },
 	// Lights and music together. A special day's line starts it, so it is quiet.
 	christmas_morning: { say: "christmas morning", entity: "script.christmas_morning", quiet: true },
+	// Ends a show and turns every light that is on to warm white.
+	white: { say: "white lights", also: ["all lights white", "turn the lights white"], entity: "script.white_lights", members: everyRoom, done: "The lights are white." },
 	christmas_off: {
 		say: "christmas lights off",
 		also: ["turn off the christmas lights", "holiday lights off", "lights back to normal"],
@@ -254,7 +262,7 @@ const config = {
 				},
 				// "Turn on the NAME", "turn off the NAME", "set the NAME to fifty
 				// percent", and a scene by its name.
-				lights: spoken(lights),
+				lights: spoken({ ...lights, ...floors }),
 				scenes: spoken(scenes)
 			}
 		},
@@ -436,7 +444,7 @@ const config = {
 					position: "top_right",
 					// The Govee rooms answer through Govee's servers, six to eight
 					// seconds after a command. A light that answers sooner is not kept waiting.
-					config: { url: homeUrl, lights, scenes, confirmSeconds: 12 }
+					config: { url: homeUrl, lights: { ...lights, ...floors }, scenes, confirmSeconds: 12 }
 				},
 				// Plays the holiday station on the mirror's speaker while the
 				// switch in Home Assistant is on. It shows nothing.

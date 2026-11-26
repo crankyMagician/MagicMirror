@@ -76,7 +76,8 @@ module.exports = NodeHelper.create({
 
 	/** Reads every light on the card and sends the rows to the page. */
 	async report () {
-		const rows = await Promise.all(Object.entries(this.config.lights).map(async ([key, light]) => {
+		const shown = Object.entries(this.config.lights).filter(([, light]) => light.card !== false);
+		const rows = await Promise.all(shown.map(async ([key, light]) => {
 			let summary = null;
 			let reachable = true;
 			try {
