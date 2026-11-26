@@ -339,3 +339,11 @@ test("show only is for shared features and a person's own", () => {
 	assert.equal(canFocus(features, "moon", "sam"), false);
 	assert.equal(canFocus(undefined, "weather", "sam"), false);
 });
+
+test("the mirror turns its screen on at its name unless that is switched off", () => {
+	assert.equal(defaultMirror().wakeScreen, true);
+	assert.equal(normalizeMirror({ wakeScreen: false }).wakeScreen, false);
+	assert.equal(normalizeMirror({ wakeScreen: "no" }).wakeScreen, true);
+	assert.equal(problemWithMirror({ ...defaultMirror(), wakeScreen: false }), null);
+	assert.match(problemWithMirror({ ...defaultMirror(), wakeScreen: "no" }), /wakeScreen/);
+});

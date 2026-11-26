@@ -231,8 +231,11 @@ const config = {
 					// Ends "show only NAME" before its minute is up.
 					show_all: ["go back", "show everything"],
 					good_morning: ["good morning"],
-					weather: ["what is the weather", "how is the weather"],
-					what_is_next: ["what is next", "what is on my calendar"]
+					weather: ["what is the weather", "how is the weather", "what's the weather", "what is the weather like"],
+					what_is_next: ["what is next", "what is on my calendar", "what's next", "what is coming up"],
+					// MMM-Voice answers these two itself.
+					help: ["what can i say", "help"],
+					cancel: ["never mind", "cancel"]
 				},
 				// Spoken name -> feature, for "show NAME", "hide NAME" and
 				// "show only NAME", which puts that one alone on the screen.
@@ -263,7 +266,11 @@ const config = {
 				// "Turn on the NAME", "turn off the NAME", "set the NAME to fifty
 				// percent", and a scene by its name.
 				lights: spoken({ ...lights, ...floors }),
-				scenes: spoken(scenes)
+				scenes: spoken(scenes),
+				// After "mirror" alone it waits this long for the command, and after
+				// an answer it listens this long for another one.
+				windowSeconds: 8,
+				followUpSeconds: 5
 			}
 		},
 		{

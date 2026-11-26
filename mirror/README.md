@@ -121,7 +121,24 @@ A person who would sooner see art gets paintings in the same kind of frame. `art
 
 ## Voice commands
 
-`MMM-Voice` listens through the webcam's microphone for phrases that start with "mirror". `services/voice.py` recognizes them on the Pi with Vosk and a fixed phrase list, so the recognizer can only answer with a listed phrase. Audio stays in memory and never leaves the Pi. A short tone on the speaker confirms each command.
+`MMM-Voice` listens through the webcam's microphone for phrases that start with "mirror". `services/voice.py` recognizes them on the Pi with Vosk and a fixed phrase list, so the recognizer can only answer with a listed phrase. Audio stays in memory and never leaves the Pi.
+
+A command can come in one breath ("mirror, good night"), or "mirror" can come alone. Then the mirror plays a rising tone and waits 8 seconds (`windowSeconds`) for the command, which needs no "mirror" in front of it. After an answer it listens 5 seconds more (`followUpSeconds`) for another command without the wake word, so the lights can be set room by room. The phrases without the wake word are in the recognizer's grammar only during those seconds, so a television cannot set them off the rest of the time.
+
+A strip in the page's bottom margin shows what the voice is doing, in the same colors on every view:
+
+- a faint microphone while it waits, and "Say "Mirror", then a command" for 15 seconds when someone arrives who has not used it that day
+- blue while it listens, with a glow that moves with the voice and a bar that shrinks as the seconds run out
+- green with the words it understood, and the existing tone
+- amber with "Sorry, I did not catch that" and what it thought it heard, and a falling tone when it had been waiting for a command (`missTone`)
+- what the mirror says, as a caption, while it speaks (`captions`)
+- red "Voice commands are off" when the recognizer has been down for ten seconds
+
+Other assistants guided these choices: Alexa's light ring and its five-second follow-up, Alexa+'s wait of about eight seconds after the wake word, the Nest Hub's dots that show when it gave up, and Siri's glow along the screen edge. The module directory had nothing that shows the states of a recognizer of our own: `MMM-Hotword2` and `MMM-Porcupine` need a Picovoice key, `MMM-ovos-wakeword` needs an OVOS stack, and the annyang modules use Chrome's online speech service.
+
+While the mirror listens it broadcasts `VOICE_LISTENING { on, reason }`. `MMM-Radio` stops the station for it, and `MMM-Household` turns a dark screen on when the reason is `wake`, unless "Turn the screen on when it hears its name" is off on the Mirror tab. The Mirror tab also lists the things to say, from `~/mirror-data/voice-commands.json`, which `MMM-Voice` writes.
+
+Each refused attempt that began with the wake word, or came while it waited, is logged as `Missed: TEXT (confidence, low or unknown)`. Read them with `journalctl -t magicmirror | grep Missed` to see which wordings people use and whether `minConfidence` is right.
 
 | Say                                                           | What happens                                                                                                         |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -132,6 +149,8 @@ A person who would sooner see art gets paintings in the same kind of frame. `art
 | "Mirror, what is the weather"                                 | The mirror says the temperature, the sky and today's high and low                                                    |
 | "Mirror, good morning"                                        | A briefing: the weather, what is left on your calendar today and your open tasks                                     |
 | "Mirror, what is next" / "what is on my calendar"             | The event happening now and the next one on your calendar                                                            |
+| "Mirror, what can I say" / "Mirror, help"                     | The mirror names a few commands and shows more of them in place of the news for 20 seconds                           |
+| "Mirror, never mind" / "cancel"                               | Stops waiting for a command                                                                                          |
 
 To add a command, add an id and its phrases to `MMM-Voice`'s `commands` option and handle `VOICE_COMMAND` in a module. If a phrase uses a word the speech model does not know, the log names the word.
 
@@ -140,6 +159,8 @@ Test a recording without the microphone (16 kHz, 16-bit, mono WAV):
 ```sh
 ~/mirror-data/venv/bin/python ~/MagicMirror/mirror/services/voice.py --commands commands.json --wav phrase.wav
 ```
+
+`commands.json` is either a list of commands or the helper's whole message (`{ "wakes": [...], "commands": [...] }`, with each command's `bare` phrases). The output shows each window, command and miss with its time in the recording, so "mirror", a pause, and a command in one file show the window opening and the command after it.
 
 ## The mirror's name and wake phrase
 

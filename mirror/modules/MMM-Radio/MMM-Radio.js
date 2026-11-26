@@ -16,7 +16,9 @@
  *   }
  *
  * The speaker takes one sound at a time, so the radio stops while the
- * mirror speaks and starts again afterwards. The access token is
+ * mirror speaks and starts again afterwards. It also stops while the mirror
+ * listens for a command (VOICE_LISTENING from MMM-Voice), so the music does
+ * not drown out the person. The access token is
  * SECRET_HA_TOKEN in config.env and stays in the node helper, which needs
  * ffmpeg on the Pi.
  */
@@ -31,21 +33,30 @@ Module.register("MMM-Radio", {
 		// Lines asked for and not yet finished. Two lines in a row must
 		// not let the radio back in between them.
 		this.pending = 0;
+		this.listeningNow = false;
 		this.sendSocketNotification("START");
 	},
 
-	notificationReceived (notification) {
+	notificationReceived (notification, payload) {
 		if (notification === "TTS_SAY") {
 			this.pending += 1;
-			this.sendSocketNotification("SPEAKING", { speaking: true });
+			this.quietNow();
 		} else if (notification === "TTS_SAY_ENDING" || notification === "TTS_SAY_ERROR") {
 			this.pending = Math.max(0, this.pending - 1);
-			this.sendSocketNotification("SPEAKING", { speaking: this.pending > 0 });
+			this.quietNow();
+		} else if (notification === "VOICE_LISTENING" && payload) {
+			this.listeningNow = Boolean(payload.on);
+			this.quietNow();
 		} else if (notification === "VOICE_COMMAND") {
 			// A spoken command may have just changed the switch. Look soon
 			// after, without waiting for the next regular look.
 			setTimeout(() => this.sendSocketNotification("LOOK"), 4000);
 		}
+	},
+
+	/** Tells the helper whether the speaker must be left quiet now. */
+	quietNow () {
+		this.sendSocketNotification("SPEAKING", { speaking: this.pending > 0 || this.listeningNow });
 	},
 
 	socketNotificationReceived (notification) {

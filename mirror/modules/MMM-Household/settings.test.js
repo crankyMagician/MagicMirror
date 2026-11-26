@@ -396,3 +396,48 @@ test("a mirror that does not say which way it faces offers the choice with nothi
 	assert.equal(menu.options[0].textContent, "As the mirror started");
 	assert.equal(menu.value, "");
 });
+
+test("the Mirror tab switches the screen-on-its-name setting and lists what to say", async (t) => {
+	const people = ["sam"];
+	const voiceCommands = { wake: "mirror", groups: [{ title: "Anytime", say: ["good night"], names: [] }, { title: "Lights", say: ["turn on the NAME"], names: ["kitchen lights", "dining room lights"] }] };
+	const state = { people, profiles: { sam: defaultProfile(["clock"], DEFAULT_BLOCKS) }, blocks: DEFAULT_BLOCKS, mirror: defaultMirror(), features: [{ key: "clock", label: "Clock", owners: [] }], enrolled: [], voiceCommands, now: { camera: false, block: "day" } };
+	const dom = new JSDOM(fs.readFileSync(path.join(__dirname, "public/settings.html"), "utf8"), { url: "http://mirror.test", runScripts: "outside-only" });
+	t.after(() => dom.window.close());
+	dom.window.structuredClone = structuredClone;
+	const saved = [];
+	dom.window.fetch = (url, options) => {
+		if (!options?.method) {
+			return Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(state)) });
+		}
+		const body = JSON.parse(options.body);
+		saved.push(body);
+		return Promise.resolve({ ok: true, json: () => Promise.resolve({ mirror: body }) });
+	};
+	dom.window.eval(fs.readFileSync(path.join(__dirname, "public/settings.js"), "utf8"));
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	const document = dom.window.document;
+	document.querySelectorAll("#people button")[1].click();
+
+	const box = document.getElementById("wake-screen");
+	assert.equal(box.checked, true);
+	box.checked = false;
+	box.dispatchEvent(new dom.window.Event("change"));
+	await new Promise((resolve) => setTimeout(resolve, 450));
+	assert.equal(saved.at(-1).wakeScreen, false);
+
+	assert.equal(document.getElementById("say-section").hidden, false);
+	const items = [...document.querySelectorAll("#say-list li")].map((item) => item.textContent);
+	assert.deepEqual(items, ["mirror good night", "mirror turn on the NAME"]);
+	assert.match(document.getElementById("say-list").textContent, /kitchen lights, dining room lights/);
+});
+
+test("the list of things to say stays hidden until the mirror has one", async (t) => {
+	const state = { people: ["sam"], profiles: { sam: defaultProfile(["clock"], DEFAULT_BLOCKS) }, blocks: DEFAULT_BLOCKS, mirror: defaultMirror(), features: [], enrolled: [], voiceCommands: null, now: { camera: false, block: "day" } };
+	const dom = new JSDOM(fs.readFileSync(path.join(__dirname, "public/settings.html"), "utf8"), { url: "http://mirror.test", runScripts: "outside-only" });
+	t.after(() => dom.window.close());
+	dom.window.structuredClone = structuredClone;
+	dom.window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(state)) });
+	dom.window.eval(fs.readFileSync(path.join(__dirname, "public/settings.js"), "utf8"));
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.equal(dom.window.document.getElementById("say-section").hidden, true);
+});

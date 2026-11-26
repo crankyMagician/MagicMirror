@@ -130,6 +130,16 @@
           <button id="wake-try" type="button">Try this phrase</button>
           <button id="wake-cancel" type="button" hidden>Stop trying it</button>
           <p id="wake-note" class="hint" role="status"></p>
+          <label class="row">
+            <span>Turn the screen on when it hears its name</span>
+            <input id="wake-screen" type="checkbox" />
+          </label>
+        </section>
+
+        <section id="say-section" aria-labelledby="say-title" hidden>
+          <h2 id="say-title">Things you can say</h2>
+          <p id="say-how" class="hint"></p>
+          <div id="say-list"></div>
         </section>
 
         <section id="mirror-voice-section" aria-labelledby="mirror-voice-title" hidden>

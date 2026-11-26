@@ -98,6 +98,9 @@ Module.register("MMM-Household", {
 		} else if (notification === "VOICE_COMMAND") {
 			// From MMM-Voice: wake up, good night, and show or hide a feature.
 			this.sendSocketNotification("VOICE", payload);
+		} else if (notification === "VOICE_LISTENING" && payload && payload.on && payload.reason === "wake") {
+			// Someone said the mirror's name. A dark screen comes on to show it listens.
+			this.sendSocketNotification("HEARD_NAME");
 		}
 	},
 
