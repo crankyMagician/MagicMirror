@@ -354,3 +354,19 @@ input[type="range"] {
   font: inherit;
   font-weight: 600;
 }
+
+/* "Things you can say" on the Mirror tab. */
+.say-group h3 {
+  margin: 0.9rem 0 0.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.say-group ul {
+  margin: 0 0 0.3rem;
+  padding-left: 1.1rem;
+}
+
+.say-group .hint {
+  margin-bottom: 0.4rem;
+}

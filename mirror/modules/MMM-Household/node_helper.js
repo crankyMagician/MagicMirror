@@ -24,6 +24,8 @@ const PROFILES_FILE = path.join(DATA_DIR, "profiles.json");
 // What the page on the screen last told this helper: the module's config with
 // its defaults, and the list of features. See remember() below.
 const REMEMBERED_FILE = path.join(DATA_DIR, "household-last.json");
+// The spoken commands, written by MMM-Voice for the Mirror tab.
+const VOICE_COMMANDS_FILE = path.join(DATA_DIR, "voice-commands.json");
 
 // Options the helper needs before the browser sends its config.
 const SERVER_DEFAULTS = { settingsPort: 8081, settingsAllow: ["127.0.0.1", "::1"], settingsHosts: ["localhost", "mirror", "mirror.local"], login: {} };
@@ -202,6 +204,8 @@ module.exports = NodeHelper.create({
 				rotationNow: this.mirror.rotation || this.rotationNow,
 				voices: voicesOn(this.speakConfig()),
 				features: this.features,
+				// What people can say, as MMM-Voice last wrote it.
+				voiceCommands: this.voiceCommands(),
 				profiles: Object.fromEntries(people.map((name) => [name, this.profileOf(name)])),
 				now: { person: this.person, unknown: this.unknown, quiet: view.quiet, block: view.block, theme: view.theme, screenOn: this.screenOn, camera: this.presence !== null, heardAt: this.heardAt }
 			});
@@ -240,7 +244,7 @@ module.exports = NodeHelper.create({
 			// The page does not set the wake phrase. It proposes a candidate, and
 			// the candidate takes over once the mirror has heard it. A page from
 			// before the mirror had a voice or a name does not send those. Keep them.
-			const next = { voice: this.mirror.voice, name: this.mirror.name, rotation: this.mirror.rotation, ...req.body, wakePhrase: this.mirror.wakePhrase, wakeCandidate: this.mirror.wakeCandidate };
+			const next = { voice: this.mirror.voice, name: this.mirror.name, rotation: this.mirror.rotation, wakeScreen: this.mirror.wakeScreen, ...req.body, wakePhrase: this.mirror.wakePhrase, wakeCandidate: this.mirror.wakeCandidate };
 			const turned = next.rotation !== this.mirror.rotation;
 			if (req.body.wakeCandidate !== undefined) {
 				const candidate = tidyPhrase(req.body.wakeCandidate);
@@ -355,6 +359,37 @@ module.exports = NodeHelper.create({
 			this.refresh();
 		} else if (notification === "VOICE") {
 			this.handleVoice(payload);
+		} else if (notification === "HEARD_NAME") {
+			this.heardName();
+		}
+	},
+
+	/**
+	 * Reads the summary of spoken commands that MMM-Voice keeps.
+	 * @returns {object|null} { wake, groups } or null before MMM-Voice wrote one
+	 */
+	voiceCommands () {
+		try {
+			const summary = JSON.parse(fs.readFileSync(VOICE_COMMANDS_FILE, "utf8"));
+			return summary && Array.isArray(summary.groups) ? summary : null;
+		} catch {
+			return null;
+		}
+	},
+
+	/**
+	 * Turns a dark screen on when someone says the mirror's name, so they can
+	 * see it listening. It goes dark again after the absent delay when nobody
+	 * is recognized. The Mirror tab can switch this off.
+	 */
+	heardName () {
+		if (!this.config || this.mirror.wakeScreen === false || this.screenOn) {
+			return;
+		}
+		Log.log("Heard its name, so the screen comes on");
+		this.setScreen(true);
+		if (!this.person) {
+			this.scheduleScreenOff();
 		}
 	},
 

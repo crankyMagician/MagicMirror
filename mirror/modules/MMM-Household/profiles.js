@@ -103,6 +103,8 @@ const defaultMirror = () => ({
 	// Which way the picture faces, as rotation.js names it. "" leaves it to
 	// the kiosk's output.conf.
 	rotation: "",
+	// Turn a dark screen on when someone says the wake phrase.
+	wakeScreen: true,
 	quietHours: { enabled: false, from: "23:00", to: "06:00" },
 	blocks: DEFAULT_BLOCKS.map((block) => ({ ...block }))
 });
@@ -144,6 +146,9 @@ const normalizeMirror = (input) => {
 	if (validRotation(source.rotation)) {
 		mirror.rotation = source.rotation;
 	}
+	if (typeof source.wakeScreen === "boolean") {
+		mirror.wakeScreen = source.wakeScreen;
+	}
 	if (typeof source.wakePhrase === "string" && PHRASE_PATTERN.test(source.wakePhrase)) {
 		mirror.wakePhrase = source.wakePhrase;
 	}
@@ -180,6 +185,9 @@ const problemWithMirror = (input, voiceIds) => {
 	}
 	if (input.rotation !== undefined && !validRotation(input.rotation)) {
 		return "rotation must be one of the directions on offer";
+	}
+	if (input.wakeScreen !== undefined && typeof input.wakeScreen !== "boolean") {
+		return "wakeScreen must be true or false";
 	}
 	if (input.wakeCandidate !== undefined && input.wakeCandidate !== "" && !(typeof input.wakeCandidate === "string" && PHRASE_PATTERN.test(input.wakeCandidate))) {
 		return "A wake phrase is one to three plain words of letters only";

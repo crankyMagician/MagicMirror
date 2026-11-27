@@ -1,0 +1,190 @@
+/* The strip that shows what the mirror's voice is doing. It sits in the
+ * page's bottom margin (MagicMirror leaves --gap-body-bottom empty), so it
+ * covers no module. Each state has one color, the same on every view:
+ * blue listens, green understood, amber missed, red off. */
+.voice-strip {
+  --voice-blue: #4f8cff;
+  --voice-green: #34c759;
+  --voice-amber: #ffb020;
+  --voice-red: #ff5a5f;
+  --voice-color: var(--color-text-dimmed);
+  --voice-level: 0;
+
+  position: fixed;
+  left: var(--gap-body-left);
+  right: var(--gap-body-right);
+  bottom: 0;
+  height: var(--gap-body-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.voice-strip .voice-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--color-text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-strip .voice-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-strip .voice-mic {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  fill: var(--voice-color);
+  stroke: var(--voice-color);
+  transition:
+    fill 0.2s,
+    stroke 0.2s;
+}
+
+/* The glow along the bottom edge. It rises and falls with the voice. */
+.voice-strip .voice-glow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--voice-color);
+  box-shadow: 0 0 24px 6px var(--voice-color);
+  opacity: 0;
+  transform-origin: bottom;
+  transform: scaleY(calc(0.4 + var(--voice-level) * 1.6));
+  transition:
+    opacity 0.25s,
+    transform 0.12s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+/* The time left to say the command, shrinking toward the middle. */
+.voice-strip .voice-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  height: 3px;
+  background: var(--voice-color);
+  transform: scaleX(0);
+  opacity: 0;
+}
+
+.voice-strip.voice-waiting .voice-text,
+.voice-strip.voice-starting .voice-text {
+  display: none;
+}
+
+.voice-strip.voice-waiting .voice-mic,
+.voice-strip.voice-starting .voice-mic {
+  opacity: 0.35;
+}
+
+.voice-strip.voice-starting {
+  visibility: hidden;
+}
+
+.voice-strip.voice-hint .voice-row {
+  color: var(--color-text);
+}
+
+.voice-strip.voice-listening {
+  --voice-color: var(--voice-blue);
+}
+
+.voice-strip.voice-listening .voice-glow {
+  opacity: 0.9;
+  animation: voice-breathe 1.6s ease-in-out infinite;
+}
+
+.voice-strip.voice-window .voice-timer {
+  opacity: 0.8;
+}
+
+.voice-strip.voice-understood {
+  --voice-color: var(--voice-green);
+}
+
+.voice-strip.voice-understood .voice-glow,
+.voice-strip.voice-missed .voice-glow {
+  opacity: 0.8;
+}
+
+.voice-strip.voice-missed {
+  --voice-color: var(--voice-amber);
+}
+
+.voice-strip.voice-speaking .voice-row {
+  font-size: 24px;
+  color: var(--color-text);
+}
+
+.voice-strip.voice-off {
+  --voice-color: var(--voice-red);
+}
+
+.voice-strip.voice-off .voice-row {
+  font-size: 20px;
+  color: var(--color-text-dimmed);
+}
+
+@keyframes voice-breathe {
+  0%,
+  100% {
+    filter: brightness(0.85);
+  }
+
+  50% {
+    filter: brightness(1.25);
+  }
+}
+
+/* "Mirror, what can I say": the examples take the news's place for a while. */
+.voice-help-card {
+  display: none;
+}
+
+body.voice-help .region.bottom.bar > .container {
+  visibility: hidden;
+}
+
+body.voice-help .voice-help-card {
+  position: fixed;
+  left: var(--gap-body-left);
+  right: var(--gap-body-right);
+  bottom: var(--gap-body-bottom);
+  height: var(--mirror-news, 124px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  color: var(--color-text-bright);
+}
+
+.voice-help-card .voice-help-title {
+  font-size: 24px;
+  color: var(--color-text-dimmed);
+}
+
+.voice-help-card ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 30px;
+  font-size: 24px;
+  line-height: 1.3;
+}

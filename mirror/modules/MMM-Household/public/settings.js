@@ -371,6 +371,7 @@
 		}
 		const phrase = mirror.wakePhrase || "mirror";
 		$("wake-current").textContent = `You say "${phrase}" before every command, as in "${phrase}, good morning".`;
+		$("wake-screen").checked = mirror.wakeScreen !== false;
 		const trying = Boolean(mirror.wakeCandidate);
 		$("wake-cancel").hidden = !trying;
 		if (trying) {
@@ -378,7 +379,27 @@
 		}
 	};
 
+	// What people can say, from the summary MMM-Voice keeps.
+	const renderSay = () => {
+		const summary = data.voiceCommands;
+		$("say-section").hidden = !summary || !Array.isArray(summary.groups) || summary.groups.length === 0;
+		if ($("say-section").hidden) {
+			return;
+		}
+		const wake = (data.mirror.wakePhrase || summary.wake || "mirror");
+		$("say-how").textContent = `Say "${wake}" first, in the same breath or alone. After "${wake}" alone, a blue light shows along the bottom of the screen and the mirror waits about 8 seconds for the command. After it answers, it listens a few seconds more for another one.`;
+		$("say-list").replaceChildren(...summary.groups.map((group) => el("div", { className: "say-group" }, [
+			el("h3", { textContent: group.title }),
+			el("ul", {}, group.say.map((phrase) => el("li", { textContent: `${wake} ${phrase}` }))),
+			...group.names.length > 0 ? [el("p", { className: "hint", textContent: `NAME is one of: ${group.names.join(", ")}` })] : []
+		])));
+	};
+
 	const bindWake = () => {
+		$("wake-screen").addEventListener("change", (event) => {
+			data.mirror.wakeScreen = event.target.checked;
+			saveMirror();
+		});
 		$("mirror-name").addEventListener("change", (event) => {
 			const name = event.target.value.trim();
 			if (name) {
@@ -493,6 +514,7 @@
 		renderRotation();
 		renderVoice();
 		renderWake();
+		renderSay();
 		renderFace();
 		photos = { count: 0, picking: false, note: "" };
 		renderPhotos();
