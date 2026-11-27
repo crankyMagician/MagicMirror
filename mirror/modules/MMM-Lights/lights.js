@@ -150,4 +150,29 @@ const repeatGuard = (seconds, now = Date.now) => {
 	};
 };
 
-module.exports = { DEFAULTS, answer, describe, parse, reached, repeatGuard, summarize };
+// Words that make a sentence Home Assistant's business even when it could not
+// carry it out, so its own reason is said ("no area called bedroom") and the
+// sentence does not go on to be answered as a question.
+const HOUSE_WORDS = /\b(lights?|lamps?|bulbs?|turn|switch|dim|brighten|brightness|percent|%|on|off)\b|%/i;
+
+/**
+ * Decides what to do with Home Assistant's answer to a sentence.
+ * @param {string} text what was said
+ * @param {object} reply from `converse`, or `{ error }` when Home Assistant did not answer
+ * @returns {object} `{ say }` to speak an answer, or `{ unhandled: true }` to pass the sentence on
+ */
+const conversed = (text, reply) => {
+	const about = HOUSE_WORDS.test(text);
+	if (reply.error) {
+		return about ? { say: "The house controls are not answering." } : { unhandled: true };
+	}
+	if (reply.kind === "action_done" || reply.kind === "query_answer") {
+		return { say: reply.speech || "Done." };
+	}
+	if (reply.code !== "no_intent_match" && about && reply.speech) {
+		return { say: reply.speech };
+	}
+	return { unhandled: true };
+};
+
+module.exports = { DEFAULTS, answer, conversed, describe, parse, reached, repeatGuard, summarize };

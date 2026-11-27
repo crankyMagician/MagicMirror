@@ -121,7 +121,15 @@ A person who would sooner see art gets paintings in the same kind of frame. `art
 
 ## Voice commands
 
-`MMM-Voice` listens through the webcam's microphone for phrases that start with "mirror". `services/voice.py` recognizes them on the Pi with Vosk and a fixed phrase list, so the recognizer can only answer with a listed phrase. Audio stays in memory and never leaves the Pi.
+`MMM-Voice` listens through the webcam's microphone for phrases that start with "mirror". `services/voice.py` recognizes them on the Pi with Vosk and a fixed phrase list, so the recognizer can only answer with a listed phrase.
+
+Since the phrase list turns any other sentence into nonsense, the mirror also writes down what was really said. When Vosk hears "mirror", the audio of that utterance (with a second from just before it) goes to Deepgram's Nova-3 model, with the names of rooms, shows and features as key terms. Deepgram's text is matched against the commands: exactly, without filler words, or nearly (at least 0.85 alike). A sentence that is no command goes out as `VOICE_UTTERANCE`. `MMM-Lights` hands it to Home Assistant's Assist, which knows the floors and rooms ("turn off upstairs", "dim the kitchen to 30%", "are the dining room lights on"), and speaks Assist's answer. A sentence nothing can act on comes back as `VOICE_UNHANDLED`, and the mirror says what it heard.
+
+- The key is `SECRET_DEEPGRAM_KEY` in `config.env` (1Password `Sam Dev`, "Deepgram API Key (Magic Mirror)"). Without it, or when Deepgram does not answer within 4 seconds, Vosk's own result is used, so the phrase list still works offline.
+- While Deepgram answers, the light switches (`defer` in `config.js`) are left to Assist. The shows, the music and the screen commands stay with the mirror.
+- Nothing is sent before the wake word, and nothing is stored. Talk that Vosk took for "mirror" but that does not start with it in Deepgram's text is dropped.
+- The strip turns violet while the words are written down and shows `Heard: "..."`. The log has `Deepgram heard: ...`, `For the house or a question: ...` and `Assist on "...": ...`.
+- Try a recording without a person: `~/mirror-data/venv/bin/python mirror/services/voice.py --commands commands.json --wav clip.wav --transcribe deepgram`, with the key in the environment.
 
 A command can come in one breath ("mirror, good night"), or "mirror" can come alone. Then the mirror plays a rising tone and waits 8 seconds (`windowSeconds`) for the command, which needs no "mirror" in front of it. After an answer it listens 5 seconds more (`followUpSeconds`) for another command without the wake word, so the lights can be set room by room. The phrases without the wake word are in the recognizer's grammar only during those seconds, so a television cannot set them off the rest of the time.
 

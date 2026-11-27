@@ -7,7 +7,7 @@ Run on the Pi:
 import json
 import unittest
 
-from voice import Commands, Listener, level_of, normalize
+from voice import SAMPLE_RATE, Capture, Commands, Listener, Understanding, deepgram, level_of, normalize
 
 COMMANDS = Commands([
     {"id": "good_night", "phrases": ["Mirror, good night."]},
@@ -268,6 +268,190 @@ class LevelTest(unittest.TestCase):
         self.assertEqual(level_of(bytes(4000)), 0.0)
         loud = array.array("h", [20000, -20000] * 1000).tobytes()
         self.assertEqual(level_of(loud), 1.0)
+
+
+def spoken():
+    """A household's commands as the helper sends them, with the light switches deferred."""
+    bare = {
+        "good_night": ["good night"],
+        "what_is_next": ["what is next"],
+        "only:calendar": ["show only the calendar", "just the calendar"],
+        "light:scene:christmas": ["christmas lights"],
+        "light:off:kitchen": ["turn off the kitchen lights"],
+    }
+    return Commands(
+        [{"id": key, "phrases": [f"mirror {p}" for p in phrases], "bare": phrases} for key, phrases in bare.items()],
+        ["mirror"],
+        defer=["light:on:", "light:off:", "light:level:"],
+        keyterms=["mirror", "nook", "mirror"],
+    )
+
+
+class AfterWakeTest(unittest.TestCase):
+    def test_the_wake_word_and_punctuation_go(self):
+        self.assertEqual(spoken().after_wake("Mirror, turn off the kitchen."), ("turn off the kitchen", True))
+
+    def test_hey_and_a_doubled_wake_word_go(self):
+        self.assertEqual(spoken().after_wake("Hey mirror mirror what is next?"), ("what is next", True))
+
+    def test_a_near_miss_of_the_wake_word_counts(self):
+        self.assertEqual(spoken().after_wake("Mira, good night."), ("good night", True))
+
+    def test_a_sentence_without_it_is_kept_whole(self):
+        self.assertEqual(spoken().after_wake("And then the kids left."), ("And then the kids left", False))
+
+    def test_keyterms_are_unique(self):
+        self.assertEqual(spoken().keyterms, ["mirror", "nook"])
+
+
+class UnderstandTest(unittest.TestCase):
+    def test_exact_loose_and_near(self):
+        commands = spoken()
+        self.assertEqual(commands.understand("Good night."), "good_night")
+        self.assertEqual(commands.understand("just calendar"), "only:calendar")
+        self.assertEqual(commands.understand("Christmas light"), "light:scene:christmas")
+
+    def test_other_sentences_find_nothing(self):
+        commands = spoken()
+        self.assertIsNone(commands.understand("what is the capital of France"))
+        self.assertIsNone(commands.understand("dim the kitchen to 30%"))
+        self.assertIsNone(commands.understand(""))
+
+
+class FakeListener:
+    def __init__(self, talking=True, announced=True, window=False):
+        self.talking, self.announced, self.window = talking, announced, window
+
+    def in_utterance(self):
+        return self.talking
+
+    def window_open(self):
+        return self.window
+
+
+CHUNK = b"\x01\x00" * 2000
+
+
+def understanding(answer=None, error=None):
+    sent = []
+
+    def transcribe(pcm):
+        sent.append(pcm)
+        if error:
+            raise error
+        return answer
+
+    return Understanding(spoken(), transcribe, start=lambda work: work()), sent
+
+
+def say(understanding, verdict):
+    """One utterance: a chunk before it, two while it is said, then the listener's verdict."""
+    understanding.audio(CHUNK, FakeListener(talking=False))
+    understanding.audio(CHUNK, FakeListener())
+    understanding.audio(CHUNK, FakeListener())
+    return understanding.messages([verdict]) + understanding.poll()
+
+
+VOSK_MISS = {"type": "missed", "text": "mirror lights show days is", "confidence": 0.9, "why": "unknown", "window": None}
+
+
+class UnderstandingTest(unittest.TestCase):
+    def test_a_command_comes_from_deepgram(self):
+        heard, sent = understanding({"text": "Mirror, show only the calendar.", "confidence": 0.97})
+        out = say(heard, VOSK_MISS)
+        self.assertEqual([m["type"] for m in out], ["thinking", "transcript", "command"])
+        self.assertEqual(out[2]["id"], "only:calendar")
+        self.assertEqual(out[2]["source"], "deepgram")
+        # The second from before the wake word went along.
+        self.assertEqual(len(sent[0]), 3 * len(CHUNK))
+
+    def test_a_light_switch_goes_to_the_house(self):
+        heard, _ = understanding({"text": "Mirror, turn off the kitchen lights.", "confidence": 0.95})
+        out = say(heard, VOSK_MISS)
+        self.assertEqual(out[-1], {"type": "utterance", "text": "turn off the kitchen lights", "confidence": 0.95, "window": None})
+
+    def test_a_show_stays_on_the_mirror(self):
+        heard, _ = understanding({"text": "Mirror, Christmas lights.", "confidence": 0.9})
+        self.assertEqual(say(heard, VOSK_MISS)[-1]["id"], "light:scene:christmas")
+
+    def test_a_question_is_an_utterance(self):
+        heard, _ = understanding({"text": "Mirror, how tall is Mount Everest?", "confidence": 0.99})
+        self.assertEqual(say(heard, VOSK_MISS)[-1]["text"], "how tall is Mount Everest")
+
+    def test_without_the_internet_vosk_decides(self):
+        held = {"type": "command", "id": "good_night", "text": "mirror good night", "confidence": 1.0, "window": None}
+        heard, _ = understanding(error=OSError("Network is unreachable"))
+        out = say(heard, held)
+        self.assertEqual(out[1], {"type": "stt_failed", "message": "Network is unreachable"})
+        self.assertEqual(out[2], held)
+
+    def test_a_false_wake_is_dropped(self):
+        heard, _ = understanding({"text": "And then the kids left.", "confidence": 0.9})
+        self.assertEqual(say(heard, VOSK_MISS)[-1]["why"], "no_wake")
+
+    def test_in_a_window_no_wake_word_is_needed(self):
+        heard, _ = understanding({"text": "And the nook too.", "confidence": 0.9})
+        out = say(heard, {**VOSK_MISS, "window": "follow_up"})
+        self.assertEqual(out[-1], {"type": "utterance", "text": "And the nook too", "confidence": 0.9, "window": "follow_up"})
+
+    def test_nothing_after_the_wake_word_sends_nothing(self):
+        heard, sent = understanding({"text": "", "confidence": 0})
+        heard.audio(CHUNK, FakeListener())
+        out = heard.messages([{"type": "window", "open": False, "reason": "timeout"}])
+        self.assertEqual(out, [{"type": "window", "open": False, "reason": "timeout"}])
+        self.assertEqual(sent, [])
+        self.assertFalse(heard.capture.active)
+
+    def test_talk_without_the_wake_word_is_not_captured(self):
+        heard, _ = understanding()
+        heard.audio(CHUNK, FakeListener(announced=False))
+        self.assertFalse(heard.capture.active)
+
+    def test_verdicts_wait_while_one_is_written_down(self):
+        heard, _ = understanding()
+        heard.start = lambda work: None
+        heard.audio(CHUNK, FakeListener())
+        self.assertEqual(heard.messages([VOSK_MISS]), [{"type": "thinking"}])
+        self.assertEqual(heard.messages([{**VOSK_MISS, "text": "mirror again"}]), [])
+
+
+class CaptureTest(unittest.TestCase):
+    def test_a_long_utterance_is_cut_off(self):
+        capture = Capture(preroll_chunks=2, max_seconds=0.25)
+        capture.start()
+        capture.feed(CHUNK)
+        self.assertFalse(capture.full())
+        capture.feed(CHUNK)
+        self.assertTrue(capture.full())
+        self.assertEqual(len(capture.take()), 2 * len(CHUNK))
+        self.assertFalse(capture.active)
+
+
+class DeepgramTest(unittest.TestCase):
+    def test_the_request_and_the_answer(self):
+        seen = {}
+
+        class Answer:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self):
+                return json.dumps({"results": {"channels": [{"alternatives": [{"transcript": "Mirror, good night.", "confidence": 0.98765}]}]}}).encode()
+
+        def opener(request, timeout):
+            seen.update(url=request.full_url, auth=request.get_header("Authorization"), body=request.data, timeout=timeout)
+            return Answer()
+
+        transcribe = deepgram("KEY", ["nook", "Hanukkah"], opener=opener)
+        self.assertEqual(transcribe(b"\x00\x00" * SAMPLE_RATE), {"text": "Mirror, good night.", "confidence": 0.988})
+        self.assertIn("model=nova-3", seen["url"])
+        self.assertIn("keyterm=nook&keyterm=Hanukkah", seen["url"])
+        self.assertEqual(seen["auth"], "Token KEY")
+        self.assertTrue(seen["body"].startswith(b"RIFF"))
+        self.assertEqual(seen["timeout"], 4.0)
 
 
 if __name__ == "__main__":

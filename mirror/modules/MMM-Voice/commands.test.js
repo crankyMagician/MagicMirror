@@ -1,7 +1,7 @@
 // Run with: node --test "mirror/modules/**/*.test.js"
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { buildCommands, chimeWav, summarize, toneWav, wakesOf, TONES } = require("./commands");
+const { buildCommands, chimeWav, keyterms, summarize, toneWav, wakesOf, TONES } = require("./commands");
 
 test("every phrase starts with the wake word", () => {
 	const commands = buildCommands({ wakeWord: "Mirror", commands: { good_night: ["good night"] }, features: { news: "newsfeed" } });
@@ -106,4 +106,9 @@ test("the three tones are different short WAV files", () => {
 		assert.ok(file.length < 22050);
 	}
 	assert.deepEqual(chimeWav(), toneWav(TONES.heard));
+});
+
+test("Deepgram expects the wake phrase and the names of lights, shows and features", () => {
+	const terms = keyterms({ wakeWord: "mirror", lights: { kitchen: "kitchen", nook: "nook" }, scenes: { "hanukkah lights": "hanukkah" }, features: { "pokemon go": "x", kitchen: "y" }, keyterms: ["Celesteela"] });
+	assert.deepEqual(terms, ["mirror", "kitchen", "nook", "hanukkah lights", "pokemon go", "Celesteela"]);
 });

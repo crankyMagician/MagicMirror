@@ -19,7 +19,7 @@ const pause = (ms) => new Promise((resolve) => {
  * @param {function(string, object): Promise<object>} [options.fetch] stands in for fetch in tests
  * @param {function(number): Promise} [options.wait] stands in for a pause in tests
  * @param {function(): number} [options.now] the clock, in milliseconds
- * @returns {object} `ready()`, `read(entity)`, `apply(entity, want, seconds)` and `scene(entity, members)`
+ * @returns {object} `ready()`, `read(entity)`, `apply(entity, want, seconds)`, `scene(entity, members)` and `converse(text)`
  */
 const createHome = ({ url, env = process.env, fetch: request = fetch, wait = pause, now = Date.now }) => {
 	const base = String(url || "").replace(/\/+$/, "");
@@ -135,7 +135,22 @@ const createHome = ({ url, env = process.env, fetch: request = fetch, wait = pau
 		return { total: lights.length, reached: lights.filter((light) => light.available).length };
 	};
 
-	return { apply, read, ready, scene };
+	/**
+	 * Hands a sentence to Assist, Home Assistant's own understanding of the
+	 * house: "turn off the upstairs lights", "dim the kitchen to 30%". It uses
+	 * the built-in agent, which needs no LLM and knows the floors, rooms and
+	 * lights that are shown to Assist.
+	 * @param {string} text what a person said, without the wake word
+	 * @returns {Promise<object>} `{ kind, code, speech }`: kind is action_done, query_answer or error
+	 */
+	const converse = async (text) => {
+		const reply = await ask("POST", "/api/conversation/process", { text, language: "en", agent_id: "conversation.home_assistant" });
+		const response = (reply && reply.response) || {};
+		const speech = response.speech && response.speech.plain ? String(response.speech.plain.speech || "") : "";
+		return { kind: String(response.response_type || "error"), code: (response.data && response.data.code) || null, speech };
+	};
+
+	return { apply, converse, read, ready, scene };
 };
 
 module.exports = { createHome };

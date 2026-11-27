@@ -1,7 +1,7 @@
 // Run with: node --test "mirror/**/*.test.js"
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { answer, describe, parse, reached, repeatGuard, summarize } = require("./lights");
+const { answer, conversed, describe, parse, reached, repeatGuard, summarize } = require("./lights");
 
 const CONFIG = {
 	lights: { bedroom: { label: "Bedroom", say: "bedroom lights", entity: "light.master_bedroom_lights" } },
@@ -73,4 +73,23 @@ test("a command heard twice in a few seconds counts once", () => {
 	assert.equal(repeated("light:off:bedroom"), false);
 	time = 9000;
 	assert.equal(repeated("light:on:bedroom"), false);
+});
+
+test("what Assist did or answered is said", () => {
+	assert.deepEqual(conversed("turn off upstairs", { kind: "action_done", speech: "Turned off the lights" }), { say: "Turned off the lights" });
+	assert.deepEqual(conversed("are the kitchen lights on", { kind: "query_answer", speech: "Yes, 6 are on" }), { say: "Yes, 6 are on" });
+});
+
+test("a sentence Assist does not understand is passed on, even with a house word in it", () => {
+	assert.deepEqual(conversed("what is on my calendar", { kind: "error", code: "no_intent_match", speech: "Sorry" }), { unhandled: true });
+	assert.deepEqual(conversed("how tall is Everest", { kind: "error", code: "no_valid_targets", speech: "Sorry" }), { unhandled: true });
+});
+
+test("a light sentence Assist understood but could not carry out gets its reason", () => {
+	assert.deepEqual(conversed("turn off the bedroom lights", { kind: "error", code: "no_valid_targets", speech: "Sorry, no lights in the bedroom" }), { say: "Sorry, no lights in the bedroom" });
+});
+
+test("an unreachable Home Assistant is said only for light sentences", () => {
+	assert.deepEqual(conversed("dim the kitchen to 30%", { error: "unreachable" }), { say: "The house controls are not answering." });
+	assert.deepEqual(conversed("who won the game", { error: "unreachable" }), { unhandled: true });
 });
