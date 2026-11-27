@@ -110,5 +110,5 @@ test("the three tones are different short WAV files", () => {
 
 test("Deepgram expects the wake phrase and the names of lights, shows and features", () => {
 	const terms = keyterms({ wakeWord: "mirror", lights: { kitchen: "kitchen", nook: "nook" }, scenes: { "hanukkah lights": "hanukkah" }, features: { "pokemon go": "x", kitchen: "y" }, keyterms: ["Celesteela"] });
-	assert.deepEqual(terms, ["mirror", "kitchen", "nook", "hanukkah lights", "pokemon go", "Celesteela"]);
+	assert.deepEqual(terms, ["mirror", "Celesteela", "kitchen", "nook", "hanukkah lights", "pokemon go"]);
 });

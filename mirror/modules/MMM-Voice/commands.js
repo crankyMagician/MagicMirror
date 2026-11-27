@@ -72,14 +72,15 @@ const buildCommands = (config) => {
 };
 
 /**
- * Lists the words Deepgram should expect: the wake phrases and the names of
- * lights, shows and features, then any extra `keyterms` from the config.
+ * Lists the words Deepgram should expect: the wake phrases, any extra
+ * `keyterms` from the config, then the names of lights, shows and features.
+ * voice.py sends the first 80.
  * @param {object} config MMM-Voice's config
  * @returns {string[]} key terms, each once, wake phrases first
  */
 const keyterms = (config) => {
 	const { lights = {}, scenes = {}, features = {}, keyterms: extra = [] } = config;
-	const terms = [...wakesOf(config), ...Object.keys(lights), ...Object.keys(scenes), ...Object.keys(features), ...extra];
+	const terms = [...wakesOf(config), ...extra, ...Object.keys(lights), ...Object.keys(scenes), ...Object.keys(features)];
 	return [...new Set(terms.map((term) => String(term).trim()).filter(Boolean))];
 };
 

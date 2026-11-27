@@ -82,6 +82,13 @@ MAX_KEYTERMS = 80
 PREROLL_CHUNKS = 8
 # One utterance is sent after this long at the latest.
 MAX_CAPTURE_SECONDS = 12.0
+# Vosk ends an utterance early at words it does not know, so a capture goes on
+# until the speaker is quiet this long. After the first part of a command
+# ("turn off the kitchen" could become "... lights") it waits a little longer.
+QUIET_SECONDS = 0.5
+QUIET_AFTER_PART_SECONDS = 1.2
+# ... and never longer than this after Vosk's verdict.
+MAX_TAIL_SECONDS = 3.0
 
 
 def emit(message: dict) -> None:
@@ -436,10 +443,14 @@ def in_background(work) -> None:
 class Understanding:
     """Sends the audio after the wake word to Deepgram and decides what was meant.
 
-    The listener's verdict on a captured utterance (a command or a miss) is
-    held until Deepgram answers. Deepgram's text wins. When Deepgram fails,
-    the held verdict goes out as it is. While one utterance is being written
-    down, the listener's verdicts on others are dropped.
+    A capture starts when the listener hears the wake word, or speech in a
+    window. When the listener gives its verdict (a command or a miss), or the
+    first part of a command, the capture goes on until the speaker is quiet,
+    because Vosk ends an utterance early at words it does not know. Then the
+    audio goes to Deepgram. Deepgram's text wins. When Deepgram fails, the
+    held verdict goes out as it is. Other verdicts that arrive meanwhile are
+    part of the same sentence, or come while one is being written down, and
+    are dropped.
     """
 
     def __init__(self, commands: Commands, transcribe, start=in_background):
@@ -449,26 +460,55 @@ class Understanding:
         self.capture = Capture()
         self.results: queue.Queue = queue.Queue()
         self.busy = False
+        self.listener: Listener | None = None
+        # While the capture runs on to the end of the sentence:
+        # {"held", "need", "quiet", "tail", "peak"}.
+        self.closing: dict | None = None
+        self.peak = 0.0
+        # The window the capture began in, if any ("wake" or "follow_up").
+        self.window: str | None = None
 
     def audio(self, data: bytes, listener: Listener) -> list[dict]:
         """Takes one chunk after the listener has seen it. Starts a capture when the mirror is spoken to."""
+        self.listener = listener
         self.capture.feed(data)
         if not self.capture.active and not self.busy and listener.in_utterance() and (listener.announced or listener.window_open()):
             self.capture.start()
-        if self.capture.full() and not self.busy:
-            return self.send(None)
+            self.peak = 0.0
+            self.window = listener.window_reason if listener.window_open() else None
+        if not self.capture.active or self.busy:
+            return []
+        level = level_of(data)
+        self.peak = max(self.peak, level)
+        if self.closing is not None:
+            seconds = len(data) / 2 / SAMPLE_RATE
+            quiet = level < max(0.12, 0.35 * self.peak)
+            self.closing["quiet"] = self.closing["quiet"] + seconds if quiet else 0.0
+            self.closing["tail"] += seconds
+            if self.closing["quiet"] >= self.closing["need"] or self.closing["tail"] >= MAX_TAIL_SECONDS:
+                return self.send(self.closing["held"])
+        if self.capture.full():
+            return self.send(self.closing["held"] if self.closing else None)
         return []
+
+    def close_after(self, held: dict | None, need: float) -> None:
+        if self.closing is None:
+            self.closing = {"held": held, "need": need, "quiet": 0.0, "tail": 0.0}
 
     def messages(self, messages: list[dict]) -> list[dict]:
         """Passes the listener's messages on, holding its verdict on a captured utterance."""
         out = []
         for message in messages:
             verdict = message["type"] in ("command", "missed")
-            if verdict and self.busy:
+            if verdict and (self.busy or self.closing is not None):
                 continue
             if verdict and self.capture.active:
-                out += self.send(message)
-            elif self.capture.active and not self.busy and (
+                self.close_after(message, QUIET_SECONDS)
+            elif message["type"] == "window" and message.get("open") and message.get("so_far") and self.capture.active and not self.busy:
+                # The first part of a command. Deepgram hears how it ends.
+                self.close_after(None, QUIET_AFTER_PART_SECONDS)
+                out.append(message)
+            elif self.capture.active and not self.busy and self.closing is None and (
                 (message["type"] == "window" and not message["open"] and message.get("reason") == "timeout")
                 or (message["type"] == "listening" and not message["on"])
             ):
@@ -481,32 +521,44 @@ class Understanding:
 
     def mute(self) -> None:
         self.capture.drop()
+        self.closing = None
+
+    def finish(self) -> list[dict]:
+        """Sends a capture that is waiting for the speaker to stop, at the end of a recording."""
+        if self.capture.active and self.closing is not None and not self.busy:
+            return self.send(self.closing["held"])
+        return []
 
     def send(self, held: dict | None) -> list[dict]:
         pcm = self.capture.take()
+        self.closing = None
         self.busy = True
+        window = held.get("window") if held else self.window
 
         def work() -> None:
             try:
-                self.results.put(("ok", self.transcribe(pcm), held))
+                self.results.put(("ok", self.transcribe(pcm), held, window))
             except Exception as error:  # noqa: BLE001 - any failure falls back to Vosk
-                self.results.put(("failed", str(error) or type(error).__name__, held))
+                self.results.put(("failed", str(error) or type(error).__name__, held, window))
 
+        # The listener's window ends here, since Deepgram decides what was said.
+        out = self.listener.close_window("sent") if self.listener is not None else []
         self.start(work)
-        return [{"type": "thinking"}]
+        return out + [{"type": "thinking"}]
 
     def poll(self) -> list[dict]:
         out = []
         while not self.results.empty():
-            kind, answer, held = self.results.get()
+            kind, answer, held, window = self.results.get()
             self.busy = False
-            out += self.decide(kind, answer, held)
+            out += self.decide(kind, answer, held, window)
         return out
 
-    def decide(self, kind: str, answer, held: dict | None) -> list[dict]:
-        window = held.get("window") if held else None
+    def decide(self, kind: str, answer, held: dict | None, window: str | None = None) -> list[dict]:
         if kind != "ok":
-            return [{"type": "stt_failed", "message": answer}] + ([held] if held else [])
+            if held is None:
+                return [{"type": "stt_failed", "message": answer}, {"type": "missed", "text": "", "confidence": 0.0, "why": "unknown", "window": window}]
+            return [{"type": "stt_failed", "message": answer}, held]
         text = answer["text"].strip()
         confidence = answer["confidence"]
         out = [{"type": "transcript", "text": text, "confidence": confidence, "window": window}]
@@ -649,7 +701,11 @@ def recognize_wav(path: str, model, commands: Commands, listener: Listener, unde
             if understanding is not None:
                 messages = understanding.audio(data, listener) + messages
             out(messages)
-        out(listener.final(json.loads(recognizers.current.FinalResult()), now) + listener.tick(now + listener.extend_seconds + listener.window_seconds))
+        last = listener.final(json.loads(recognizers.current.FinalResult()), now)
+        if understanding is not None:
+            # The recording ended where a person would have gone quiet.
+            last = understanding.messages(last) + understanding.finish()
+        out(last + listener.tick(now + listener.extend_seconds + listener.window_seconds))
     return 0
 
 

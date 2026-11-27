@@ -321,6 +321,7 @@ class UnderstandTest(unittest.TestCase):
 class FakeListener:
     def __init__(self, talking=True, announced=True, window=False):
         self.talking, self.announced, self.window = talking, announced, window
+        self.window_reason = "follow_up" if window else None
 
     def in_utterance(self):
         return self.talking
@@ -328,8 +329,12 @@ class FakeListener:
     def window_open(self):
         return self.window
 
+    def close_window(self, why):
+        return []
 
-CHUNK = b"\x01\x00" * 2000
+
+CHUNK = b"\x00\x10" * 2000  # an eighth of a second of speech
+QUIET = b"\x00\x00" * 2000  # and of silence
 
 
 def understanding(answer=None, error=None):
@@ -344,12 +349,16 @@ def understanding(answer=None, error=None):
     return Understanding(spoken(), transcribe, start=lambda work: work()), sent
 
 
-def say(understanding, verdict):
-    """One utterance: a chunk before it, two while it is said, then the listener's verdict."""
-    understanding.audio(CHUNK, FakeListener(talking=False))
-    understanding.audio(CHUNK, FakeListener())
-    understanding.audio(CHUNK, FakeListener())
-    return understanding.messages([verdict]) + understanding.poll()
+def say(understanding, verdict, listener=None):
+    """One utterance: a chunk before it, two while it is said, the listener's verdict, then half a second of quiet."""
+    listener = listener or FakeListener()
+    out = understanding.audio(CHUNK, FakeListener(talking=False))
+    out += understanding.audio(CHUNK, listener)
+    out += understanding.audio(CHUNK, listener)
+    out += understanding.messages([verdict])
+    for _ in range(4):
+        out += understanding.audio(QUIET, listener)
+    return out + understanding.poll()
 
 
 VOSK_MISS = {"type": "missed", "text": "mirror lights show days is", "confidence": 0.9, "why": "unknown", "window": None}
@@ -362,8 +371,36 @@ class UnderstandingTest(unittest.TestCase):
         self.assertEqual([m["type"] for m in out], ["thinking", "transcript", "command"])
         self.assertEqual(out[2]["id"], "only:calendar")
         self.assertEqual(out[2]["source"], "deepgram")
-        # The second from before the wake word went along.
-        self.assertEqual(len(sent[0]), 3 * len(CHUNK))
+        # The second from before the wake word went along, and the quiet after the verdict.
+        self.assertEqual(len(sent[0]), 3 * len(CHUNK) + 4 * len(QUIET))
+
+    def test_speech_after_vosk_ends_the_utterance_still_goes_along(self):
+        heard, sent = understanding({"text": "Mirror, how tall is Mount Everest?", "confidence": 0.99})
+        listener = FakeListener()
+        heard.audio(CHUNK, listener)
+        self.assertEqual(heard.messages([VOSK_MISS]), [])
+        # "Everest" comes after Vosk's verdict, and Vosk's verdict on it is part of the same sentence.
+        for _ in range(3):
+            self.assertEqual(heard.audio(CHUNK, listener), [])
+        self.assertEqual(heard.messages([{**VOSK_MISS, "text": "everest"}]), [])
+        out = []
+        for _ in range(4):
+            out += heard.audio(QUIET, listener)
+        self.assertEqual(out, [{"type": "thinking"}])
+        self.assertEqual(len(sent[0]), 4 * len(CHUNK) + 4 * len(QUIET))
+
+    def test_the_first_part_of_a_command_is_sent_when_the_speaker_stops(self):
+        heard, sent = understanding({"text": "Mirror, turn off the kitchen.", "confidence": 0.99})
+        listener = FakeListener()
+        heard.audio(CHUNK, listener)
+        window = {"type": "window", "open": True, "seconds": 8, "reason": "wake", "so_far": "turn off the kitchen"}
+        self.assertEqual(heard.messages([window]), [window])
+        out = []
+        for _ in range(9):
+            out += heard.audio(QUIET, listener)
+        self.assertEqual(out, [])
+        out += heard.audio(QUIET, listener) + heard.poll()
+        self.assertEqual(out[-1], {"type": "utterance", "text": "turn off the kitchen", "confidence": 0.99, "window": None})
 
     def test_a_light_switch_goes_to_the_house(self):
         heard, _ = understanding({"text": "Mirror, turn off the kitchen lights.", "confidence": 0.95})
@@ -382,8 +419,8 @@ class UnderstandingTest(unittest.TestCase):
         held = {"type": "command", "id": "good_night", "text": "mirror good night", "confidence": 1.0, "window": None}
         heard, _ = understanding(error=OSError("Network is unreachable"))
         out = say(heard, held)
-        self.assertEqual(out[1], {"type": "stt_failed", "message": "Network is unreachable"})
-        self.assertEqual(out[2], held)
+        self.assertEqual(out[-2], {"type": "stt_failed", "message": "Network is unreachable"})
+        self.assertEqual(out[-1], held)
 
     def test_a_false_wake_is_dropped(self):
         heard, _ = understanding({"text": "And then the kids left.", "confidence": 0.9})
@@ -391,7 +428,7 @@ class UnderstandingTest(unittest.TestCase):
 
     def test_in_a_window_no_wake_word_is_needed(self):
         heard, _ = understanding({"text": "And the nook too.", "confidence": 0.9})
-        out = say(heard, {**VOSK_MISS, "window": "follow_up"})
+        out = say(heard, {**VOSK_MISS, "window": "follow_up"}, FakeListener(announced=False, window=True))
         self.assertEqual(out[-1], {"type": "utterance", "text": "And the nook too", "confidence": 0.9, "window": "follow_up"})
 
     def test_nothing_after_the_wake_word_sends_nothing(self):
@@ -410,8 +447,8 @@ class UnderstandingTest(unittest.TestCase):
     def test_verdicts_wait_while_one_is_written_down(self):
         heard, _ = understanding()
         heard.start = lambda work: None
-        heard.audio(CHUNK, FakeListener())
-        self.assertEqual(heard.messages([VOSK_MISS]), [{"type": "thinking"}])
+        say(heard, VOSK_MISS)
+        self.assertTrue(heard.busy)
         self.assertEqual(heard.messages([{**VOSK_MISS, "text": "mirror again"}]), [])
 
 
