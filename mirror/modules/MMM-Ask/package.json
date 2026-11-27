@@ -1,0 +1,11 @@
+{
+	"name": "mmm-ask",
+	"version": "1.0.0",
+	"private": true,
+	"type": "commonjs",
+	"description": "Answers spoken questions on the household mirror with Claude Haiku 5.5 and web search.",
+	"license": "MIT",
+	"dependencies": {
+		"@anthropic-ai/sdk": "1.8.0"
+	}
+}

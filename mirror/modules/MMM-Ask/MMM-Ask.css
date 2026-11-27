@@ -1,0 +1,31 @@
+/* The last answer, in the top band, for half a minute. */
+.ask-card {
+  max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.ask-card:empty {
+  display: none;
+}
+
+.ask-question {
+  margin-bottom: 6px;
+}
+
+.ask-question::before {
+  content: "\201C";
+}
+
+.ask-question::after {
+  content: "\201D";
+}
+
+.ask-answer {
+  line-height: 1.3;
+  color: var(--color-text-bright);
+}
+
+.ask-sources {
+  margin-top: 6px;
+}

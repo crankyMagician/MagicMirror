@@ -281,7 +281,9 @@ const config = {
 				// Assistant's Assist (MMM-Lights), which knows the floors and
 				// rooms. The shows and the music stay with the mirror.
 				defer: homeUrl ? ["light:on:", "light:off:", "light:level:"] : [],
-				keyterms: ["upstairs", "downstairs", "Hanukkah", "Pokémon", "Mew", "Miltank", "Celesteela"]
+				keyterms: ["upstairs", "downstairs", "Hanukkah", "Pokémon", "Mew", "Miltank", "Celesteela"],
+				// MMM-Ask answers the sentences nothing else could act on.
+				sayUnhandled: false
 			}
 		},
 		{
@@ -380,6 +382,19 @@ const config = {
 					heather: { name: "Heather" }
 				},
 				specialDays: JSON.parse(process.env.MIRROR_SPECIAL_DAYS || "[]")
+			}
+		},
+		{
+			// Questions in people's own words, answered by Claude Haiku 5.5 with
+			// web search and spoken in the voice of the person at the mirror.
+			// The key is SECRET_ANTHROPIC_KEY in config.env.
+			module: "MMM-Ask",
+			position: "top_bar",
+			config: {
+				people: {
+					sam: { name: "Sam" },
+					heather: { name: "Heather" }
+				}
 			}
 		},
 		{
