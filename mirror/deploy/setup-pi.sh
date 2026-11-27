@@ -69,6 +69,10 @@ as_user "
 		for dir in mirror/modules/*/; do
 			[ -d \"\$dir\" ] || continue
 			ln -sfn \"../\$dir\" \"modules/\$(basename \"\$dir\")\"
+			# Our own modules with packages (MMM-Ask) install them from the lock file.
+			if [ -f \"\$dir/package-lock.json\" ]; then
+				(cd \"\$dir\" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
+			fi
 		done
 	fi
 	mkdir -p '$MIRROR_HOME/mirror-data'
