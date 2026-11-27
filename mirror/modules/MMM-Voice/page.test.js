@@ -126,3 +126,40 @@ test("a person who arrives gets a hint until the mirror has heard a command that
 	assert.ok(strip(document).classList.contains("voice-waiting"));
 	clearTimeout(module.stateTimer);
 });
+
+test("Deepgram's words show while the mirror works, and a sentence goes to the house", (t) => {
+	const { dom, module, document, sent } = load();
+	t.after(() => dom.window.close());
+	module.socketNotificationReceived("VOICE_EVENT", { type: "thinking" });
+	assert.ok(strip(document).classList.contains("voice-thinking"));
+
+	module.socketNotificationReceived("VOICE_EVENT", { type: "transcript", text: "Mirror, dim the kitchen to 30%.", confidence: 0.98, window: null });
+	assert.equal(words(document), "Heard: \"Dim the kitchen to 30%\"");
+
+	module.notificationReceived("HOUSEHOLD_PRESENCE", { person: "sam" });
+	module.socketNotificationReceived("VOICE_EVENT", { type: "utterance", text: "dim the kitchen to 30%", confidence: 0.98, window: null });
+	assert.deepEqual(sent.at(-1), { notification: "VOICE_UTTERANCE", payload: { text: "dim the kitchen to 30%", window: null, person: "sam" } });
+	clearTimeout(module.stateTimer);
+});
+
+test("a sentence nothing could act on is said back, except after an answer", (t) => {
+	const { dom, module, document, sent } = load();
+	t.after(() => dom.window.close());
+	module.notificationReceived("VOICE_UNHANDLED", { text: "Paint the fence", window: null });
+	assert.ok(strip(document).classList.contains("voice-missed"));
+	assert.equal(sent.at(-1).notification, "TTS_SAY");
+	assert.equal(sent.at(-1).payload.text, "I heard paint the fence, but I do not know how to do that yet.");
+
+	const before = sent.length;
+	module.notificationReceived("VOICE_UNHANDLED", { text: "and then we left", window: "follow_up" });
+	assert.equal(sent.length, before);
+	assert.ok(strip(document).classList.contains("voice-waiting"));
+	clearTimeout(module.stateTimer);
+});
+
+test("a wake word that Deepgram did not hear is dropped without a word", (t) => {
+	const { dom, module, document } = load();
+	t.after(() => dom.window.close());
+	module.socketNotificationReceived("VOICE_EVENT", { type: "missed", text: "and then the kids left", why: "no_wake", window: null });
+	assert.ok(strip(document).classList.contains("voice-waiting"));
+});

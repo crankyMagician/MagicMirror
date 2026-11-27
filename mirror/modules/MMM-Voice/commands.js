@@ -72,6 +72,19 @@ const buildCommands = (config) => {
 };
 
 /**
+ * Lists the words Deepgram should expect: the wake phrases, any extra
+ * `keyterms` from the config, then the names of lights, shows and features.
+ * voice.py sends the first 80.
+ * @param {object} config MMM-Voice's config
+ * @returns {string[]} key terms, each once, wake phrases first
+ */
+const keyterms = (config) => {
+	const { lights = {}, scenes = {}, features = {}, keyterms: extra = [] } = config;
+	const terms = [...wakesOf(config), ...extra, ...Object.keys(lights), ...Object.keys(scenes), ...Object.keys(features)];
+	return [...new Set(terms.map((term) => String(term).trim()).filter(Boolean))];
+};
+
+/**
  * Sums up what people can say, for the settings page. Each group has a
  * title, the shapes of its phrases, and the names that fill them in.
  * @param {object} config see buildCommands
@@ -146,4 +159,4 @@ const toneWav = (tone, sampleRate = 22050) => {
  */
 const chimeWav = (sampleRate = 22050) => toneWav(TONES.heard, sampleRate);
 
-module.exports = { buildCommands, chimeWav, summarize, toneWav, wakesOf, LIGHT_LEVELS, TONES };
+module.exports = { buildCommands, chimeWav, keyterms, summarize, toneWav, wakesOf, LIGHT_LEVELS, TONES };

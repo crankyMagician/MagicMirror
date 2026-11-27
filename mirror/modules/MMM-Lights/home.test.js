@@ -146,3 +146,24 @@ test("an unreachable Home Assistant is an error for the caller to report", async
 	await assert.rejects(home.apply(GROUP, { on: true }, 1), /fetch failed/);
 	await assert.rejects(home.read(GROUP), /fetch failed/);
 });
+
+test("a sentence goes to Assist's built-in agent and its answer comes back", async () => {
+	const calls = [];
+	const reply = { response: { response_type: "action_done", speech: { plain: { speech: "Turned off the lights" } }, data: { success: [] } } };
+	const home = createHome({
+		url: "http://ha:8123",
+		env: { SECRET_HA_TOKEN: "T" },
+		fetch: (url, options) => {
+			calls.push({ path: new URL(url).pathname, body: JSON.parse(options.body), authorization: options.headers.Authorization });
+			return Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(reply) });
+		}
+	});
+	assert.deepEqual(await home.converse("turn off upstairs"), { kind: "action_done", code: null, speech: "Turned off the lights" });
+	assert.deepEqual(calls, [{ path: "/api/conversation/process", body: { text: "turn off upstairs", language: "en", agent_id: "conversation.home_assistant" }, authorization: "Bearer T" }]);
+});
+
+test("an Assist error carries its code", async () => {
+	const reply = { response: { response_type: "error", speech: { plain: { speech: "Sorry, I couldn't understand that" } }, data: { code: "no_intent_match" } } };
+	const home = createHome({ url: "http://ha:8123", env: { SECRET_HA_TOKEN: "T" }, fetch: () => Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(reply) }) });
+	assert.deepEqual(await home.converse("how tall is Everest"), { kind: "error", code: "no_intent_match", speech: "Sorry, I couldn't understand that" });
+});

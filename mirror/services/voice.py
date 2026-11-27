@@ -10,11 +10,16 @@ reads one JSON object per line from its stdout:
     {"type": "command", "id": "good_night", "text": "mirror good night", "confidence": 0.97, "window": null}
     {"type": "missed", "text": "mirror turn of the kitchen", "confidence": 0.62, "why": "low", "window": "wake"}
     {"type": "level", "value": 0.4}            voice level, only while listening
+    {"type": "thinking"}                       the words are being transcribed
+    {"type": "transcript", "text": "Mirror, turn off the kitchen.", "confidence": 0.98, "window": null}
+    {"type": "utterance", "text": "turn off the kitchen.", "confidence": 0.98, "window": null}
+    {"type": "stt_failed", "message": "..."}   Deepgram did not answer, Vosk's result is used
     {"type": "error", "message": "..."}
 
 It reads commands from stdin, also one JSON object per line:
 
-    {"cmd": "commands", "wakes": ["mirror"], "commands": [{"id": "good_night", "phrases": ["mirror good night"], "bare": ["good night"]}]}
+    {"cmd": "commands", "wakes": ["mirror"], "commands": [{"id": "good_night", "phrases": ["mirror good night"], "bare": ["good night"]}],
+     "keyterms": ["mirror", "nook"], "defer": ["light:on:"]}
     {"cmd": "mute", "on": true}
     {"cmd": "hold", "seconds": 0.4}            drop the audio while a tone plays
     {"cmd": "follow_up", "seconds": 5}         listen without the wake word for a while
@@ -25,16 +30,31 @@ command needs no wake word. Outside a window the phrases without the wake
 word are not in the recognizer's grammar at all, so background talk cannot
 set them off.
 
-Recognition uses Vosk with a fixed phrase list, so the recognizer can only
-ever answer with one of the listed phrases or "[unk]". Audio is read from
-the microphone through arecord, stays in memory and is never stored or sent
-anywhere. While muted (the mirror itself is speaking) audio is discarded.
+Vosk, with a fixed phrase list, finds the wake word on the Pi. It can only
+ever answer with one of the listed phrases or "[unk]", so it turns any other
+sentence into nonsense. With --transcribe deepgram, the audio of an
+utterance that starts with the wake word (or that falls in a window) also
+goes to Deepgram, which writes down what was really said. That text is
+matched against the commands, and a sentence that is no command comes out as
+an "utterance" for other modules (Home Assistant, questions). Vosk's own
+result is held meanwhile and used when Deepgram does not answer, so the
+mirror still works without the internet. Commands whose id starts with a
+"defer" prefix (the light switches) are left to the utterance while
+Deepgram answers.
+
+Audio is read from the microphone through arecord and stays in memory.
+Nothing is stored. Nothing is sent anywhere before the wake word, and only
+the seconds after it go to Deepgram. While muted (the mirror itself is
+speaking) audio is discarded.
 """
 
 from __future__ import annotations
 
 import argparse
 import array
+import collections
+import difflib
+import io
 import json
 import math
 import os
@@ -45,6 +65,8 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.parse
+import urllib.request
 import wave
 from pathlib import Path
 
@@ -53,6 +75,20 @@ MODEL_DIR = DATA_DIR / "models" / "vosk-model-small-en-us-0.15"
 SAMPLE_RATE = 16000
 CHUNK_BYTES = 2000 * 2  # an eighth of a second of 16-bit mono audio
 UNKNOWN = "[unk]"
+DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
+# Deepgram takes up to about 500 tokens of key terms per request.
+MAX_KEYTERMS = 80
+# A second of audio from before the wake word was recognized, so its start is not cut off.
+PREROLL_CHUNKS = 8
+# One utterance is sent after this long at the latest.
+MAX_CAPTURE_SECONDS = 12.0
+# Vosk ends an utterance early at words it does not know, so a capture goes on
+# until the speaker is quiet this long. After the first part of a command
+# ("turn off the kitchen" could become "... lights") it waits a little longer.
+QUIET_SECONDS = 0.5
+QUIET_AFTER_PART_SECONDS = 1.2
+# ... and never longer than this after Vosk's verdict.
+MAX_TAIL_SECONDS = 3.0
 
 
 def emit(message: dict) -> None:
@@ -85,7 +121,12 @@ class Commands:
     pause can be put back together.
     """
 
-    def __init__(self, commands: list[dict], wakes: list[str] | None = None):
+    def __init__(self, commands: list[dict], wakes: list[str] | None = None, defer: list[str] | None = None, keyterms: list[str] | None = None):
+        # Command ids that start with one of these go to the utterance while
+        # Deepgram answers, so Home Assistant handles them.
+        self.defer: tuple[str, ...] = tuple(defer or [])
+        # Words Deepgram should expect: names of rooms, shows and features.
+        self.keyterms: list[str] = list(dict.fromkeys(str(term) for term in keyterms or [] if str(term).strip()))[:MAX_KEYTERMS]
         self.by_phrase: dict[str, str] = {}
         self.bare: dict[str, str] = {}
         self.wakes: set[str] = {clean for clean in (normalize(wake) for wake in wakes or []) if clean}
@@ -156,6 +197,50 @@ class Commands:
     def unfinished(self, text: str) -> bool:
         """True when a phrase is the first part of a command, such as "turn on"."""
         return bool(text) and self.loosen(text) in self.starts
+
+    def deferred(self, command_id: str) -> bool:
+        return bool(self.defer) and command_id.startswith(self.defer)
+
+    def after_wake(self, transcript: str) -> tuple[str, bool]:
+        """Splits a written-down sentence into what follows the wake phrase.
+
+        Returns the rest, as written, and whether the sentence started with the
+        wake phrase. "Hey" in front and a doubled wake phrase are allowed, and
+        a near miss such as "Mira" counts, since Vosk heard the wake phrase there.
+        """
+        words = transcript.split()
+        start = 1 if words and normalize(words[0]) == "hey" else 0
+        found = False
+        for _ in range(2):
+            for wake in sorted(self.wakes, key=len, reverse=True):
+                count = len(wake.split())
+                said = normalize(" ".join(words[start : start + count]))
+                if said and (said == wake or difflib.SequenceMatcher(None, said, wake).ratio() >= 0.6):
+                    start += count
+                    found = True
+                    break
+            else:
+                break
+        rest = " ".join(words[start:]) if found else transcript
+        return rest.strip(" ,.!?;:"), found
+
+    def understand(self, text: str) -> str | None:
+        """Finds the command for a sentence without the wake word, exactly, loosely or nearly.
+
+        Nearly means a ratio of at least 0.85 against one command's loose
+        form, so "christmas light" finds "christmas lights" and a sentence
+        that is no command finds nothing.
+        """
+        clean = normalize(text)
+        if not clean:
+            return None
+        found = self.lookup(clean, window=True)
+        if found is not None:
+            return found
+        key = self.loosen(clean)
+        table = {**self.loose_bare, **{k: v for k, v in self.loose.items() if k not in self.loose_bare}}
+        close = difflib.get_close_matches(key, [k for k, v in table.items() if v is not None], n=1, cutoff=0.85)
+        return table[close[0]] if close else None
 
     def match(self, result: dict, min_confidence: float) -> dict | None:
         """Turns a Vosk final result for a full phrase into a command message, or None."""
@@ -278,6 +363,218 @@ class Listener:
         return []
 
 
+def wav_bytes(pcm: bytes) -> bytes:
+    """Wraps raw 16 kHz mono audio in a WAV header, in memory."""
+    out = io.BytesIO()
+    with wave.open(out, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(SAMPLE_RATE)
+        audio.writeframes(pcm)
+    return out.getvalue()
+
+
+def deepgram(key: str, keyterms: list[str], opener=urllib.request.urlopen, timeout: float = 4.0):
+    """Gives a function that writes down one utterance with Deepgram's Nova-3 model.
+
+    The function takes raw audio and returns {"text", "confidence"}, or raises.
+    """
+
+    def transcribe(pcm: bytes) -> dict:
+        params = [("model", "nova-3"), ("language", "en-US"), ("smart_format", "true")]
+        params += [("keyterm", term) for term in keyterms[:MAX_KEYTERMS]]
+        request = urllib.request.Request(
+            f"{DEEPGRAM_URL}?{urllib.parse.urlencode(params)}",
+            data=wav_bytes(pcm),
+            headers={"Authorization": f"Token {key}", "Content-Type": "audio/wav"},
+            method="POST",
+        )
+        with opener(request, timeout=timeout) as response:
+            body = json.loads(response.read())
+        best = body["results"]["channels"][0]["alternatives"][0]
+        return {"text": str(best.get("transcript", "")), "confidence": round(float(best.get("confidence", 0.0)), 3)}
+
+    return transcribe
+
+
+class Capture:
+    """Keeps the audio of one utterance, with a second from before it began."""
+
+    def __init__(self, preroll_chunks: int = PREROLL_CHUNKS, max_seconds: float = MAX_CAPTURE_SECONDS):
+        self.preroll: collections.deque = collections.deque(maxlen=preroll_chunks)
+        self.max_seconds = max_seconds
+        self.chunks: list[bytes] | None = None
+        self.seconds = 0.0
+
+    @property
+    def active(self) -> bool:
+        return self.chunks is not None
+
+    def feed(self, data: bytes) -> None:
+        if self.chunks is None:
+            self.preroll.append(data)
+        else:
+            self.chunks.append(data)
+            self.seconds += len(data) / 2 / SAMPLE_RATE
+
+    def start(self) -> None:
+        if self.chunks is None:
+            self.chunks = list(self.preroll)
+            self.seconds = sum(len(chunk) for chunk in self.chunks) / 2 / SAMPLE_RATE
+            self.preroll.clear()
+
+    def full(self) -> bool:
+        return self.active and self.seconds >= self.max_seconds
+
+    def take(self) -> bytes:
+        audio = b"".join(self.chunks or [])
+        self.drop()
+        return audio
+
+    def drop(self) -> None:
+        self.chunks = None
+        self.seconds = 0.0
+
+
+def in_background(work) -> None:
+    threading.Thread(target=work, daemon=True).start()
+
+
+class Understanding:
+    """Sends the audio after the wake word to Deepgram and decides what was meant.
+
+    A capture starts when the listener hears the wake word, or speech in a
+    window. When the listener gives its verdict (a command or a miss), or the
+    first part of a command, the capture goes on until the speaker is quiet,
+    because Vosk ends an utterance early at words it does not know. Then the
+    audio goes to Deepgram. Deepgram's text wins. When Deepgram fails, the
+    held verdict goes out as it is. Other verdicts that arrive meanwhile are
+    part of the same sentence, or come while one is being written down, and
+    are dropped.
+    """
+
+    def __init__(self, commands: Commands, transcribe, start=in_background):
+        self.commands = commands
+        self.transcribe = transcribe
+        self.start = start
+        self.capture = Capture()
+        self.results: queue.Queue = queue.Queue()
+        self.busy = False
+        self.listener: Listener | None = None
+        # While the capture runs on to the end of the sentence:
+        # {"held", "need", "quiet", "tail", "peak"}.
+        self.closing: dict | None = None
+        self.peak = 0.0
+        # The window the capture began in, if any ("wake" or "follow_up").
+        self.window: str | None = None
+
+    def audio(self, data: bytes, listener: Listener) -> list[dict]:
+        """Takes one chunk after the listener has seen it. Starts a capture when the mirror is spoken to."""
+        self.listener = listener
+        self.capture.feed(data)
+        if not self.capture.active and not self.busy and listener.in_utterance() and (listener.announced or listener.window_open()):
+            self.capture.start()
+            self.peak = 0.0
+            self.window = listener.window_reason if listener.window_open() else None
+        if not self.capture.active or self.busy:
+            return []
+        level = level_of(data)
+        self.peak = max(self.peak, level)
+        if self.closing is not None:
+            seconds = len(data) / 2 / SAMPLE_RATE
+            quiet = level < max(0.12, 0.35 * self.peak)
+            self.closing["quiet"] = self.closing["quiet"] + seconds if quiet else 0.0
+            self.closing["tail"] += seconds
+            if self.closing["quiet"] >= self.closing["need"] or self.closing["tail"] >= MAX_TAIL_SECONDS:
+                return self.send(self.closing["held"])
+        if self.capture.full():
+            return self.send(self.closing["held"] if self.closing else None)
+        return []
+
+    def close_after(self, held: dict | None, need: float) -> None:
+        if self.closing is None:
+            self.closing = {"held": held, "need": need, "quiet": 0.0, "tail": 0.0}
+
+    def messages(self, messages: list[dict]) -> list[dict]:
+        """Passes the listener's messages on, holding its verdict on a captured utterance."""
+        out = []
+        for message in messages:
+            verdict = message["type"] in ("command", "missed")
+            if verdict and (self.busy or self.closing is not None):
+                continue
+            if verdict and self.capture.active:
+                self.close_after(message, QUIET_SECONDS)
+            elif message["type"] == "window" and message.get("open") and message.get("so_far") and self.capture.active and not self.busy:
+                # The first part of a command. Deepgram hears how it ends.
+                self.close_after(None, QUIET_AFTER_PART_SECONDS)
+                out.append(message)
+            elif self.capture.active and not self.busy and self.closing is None and (
+                (message["type"] == "window" and not message["open"] and message.get("reason") == "timeout")
+                or (message["type"] == "listening" and not message["on"])
+            ):
+                # Nothing came after the wake word, or the wake word was too faint to count.
+                self.capture.drop()
+                out.append(message)
+            else:
+                out.append(message)
+        return out
+
+    def mute(self) -> None:
+        self.capture.drop()
+        self.closing = None
+
+    def finish(self) -> list[dict]:
+        """Sends a capture that is waiting for the speaker to stop, at the end of a recording."""
+        if self.capture.active and self.closing is not None and not self.busy:
+            return self.send(self.closing["held"])
+        return []
+
+    def send(self, held: dict | None) -> list[dict]:
+        pcm = self.capture.take()
+        self.closing = None
+        self.busy = True
+        window = held.get("window") if held else self.window
+
+        def work() -> None:
+            try:
+                self.results.put(("ok", self.transcribe(pcm), held, window))
+            except Exception as error:  # noqa: BLE001 - any failure falls back to Vosk
+                self.results.put(("failed", str(error) or type(error).__name__, held, window))
+
+        # The listener's window ends here, since Deepgram decides what was said.
+        out = self.listener.close_window("sent") if self.listener is not None else []
+        self.start(work)
+        return out + [{"type": "thinking"}]
+
+    def poll(self) -> list[dict]:
+        out = []
+        while not self.results.empty():
+            kind, answer, held, window = self.results.get()
+            self.busy = False
+            out += self.decide(kind, answer, held, window)
+        return out
+
+    def decide(self, kind: str, answer, held: dict | None, window: str | None = None) -> list[dict]:
+        if kind != "ok":
+            if held is None:
+                return [{"type": "stt_failed", "message": answer}, {"type": "missed", "text": "", "confidence": 0.0, "why": "unknown", "window": window}]
+            return [{"type": "stt_failed", "message": answer}, held]
+        text = answer["text"].strip()
+        confidence = answer["confidence"]
+        out = [{"type": "transcript", "text": text, "confidence": confidence, "window": window}]
+        rest, addressed = self.commands.after_wake(text)
+        if not text or not (addressed or window):
+            # Vosk thought it heard the wake word, and Deepgram did not.
+            why = "empty" if not text else "no_wake"
+            return out + [{"type": "missed", "text": normalize(text), "confidence": confidence, "why": why, "window": window}]
+        if not rest:
+            return out + [{"type": "missed", "text": "", "confidence": confidence, "why": "empty", "window": window}]
+        found = self.commands.understand(rest)
+        if found is not None and not self.commands.deferred(found):
+            return out + [{"type": "command", "id": found, "text": normalize(rest), "confidence": confidence, "window": window, "source": "deepgram"}]
+        return out + [{"type": "utterance", "text": rest, "confidence": confidence, "window": window}]
+
+
 def level_of(data: bytes) -> float:
     """Gives a chunk's loudness from 0 to 1, for the light on the screen."""
     samples = array.array("h")
@@ -380,7 +677,7 @@ def stdin_reader(messages: queue.Queue) -> None:
         os._exit(0)
 
 
-def recognize_wav(path: str, model, commands: Commands, listener: Listener) -> int:
+def recognize_wav(path: str, model, commands: Commands, listener: Listener, understanding: Understanding | None = None) -> int:
     """Runs one WAV file through the recognizer and the listener. Used for testing."""
     with wave.open(path, "rb") as audio:
         if audio.getnchannels() != 1 or audio.getsampwidth() != 2 or audio.getframerate() != SAMPLE_RATE:
@@ -388,16 +685,44 @@ def recognize_wav(path: str, model, commands: Commands, listener: Listener) -> i
             return 1
         recognizers = Recognizers(model, commands)
         now = 0.0
+
+        def out(messages: list[dict]) -> None:
+            if understanding is not None:
+                messages = understanding.messages(messages) + understanding.poll()
+            for message in messages:
+                emit({**message, "at": round(now, 2)})
+
         while True:
             data = audio.readframes(CHUNK_BYTES // 2)
             if not data:
                 break
             now += len(data) / 2 / SAMPLE_RATE
-            for message in feed(recognizers, listener, data, now):
-                emit({**message, "at": round(now, 2)})
-        for message in listener.final(json.loads(recognizers.current.FinalResult()), now) + listener.tick(now + listener.extend_seconds + listener.window_seconds):
-            emit({**message, "at": round(now, 2)})
+            messages = feed(recognizers, listener, data, now)
+            if understanding is not None:
+                messages = understanding.audio(data, listener) + messages
+            out(messages)
+        last = listener.final(json.loads(recognizers.current.FinalResult()), now)
+        if understanding is not None:
+            # The recording ended where a person would have gone quiet.
+            last = understanding.messages(last) + understanding.finish()
+        out(last + listener.tick(now + listener.extend_seconds + listener.window_seconds))
     return 0
+
+
+def commands_of(message: dict) -> Commands:
+    """Builds the commands from the helper's message, or from a file holding one."""
+    return Commands(message.get("commands", []), message.get("wakes"), message.get("defer"), message.get("keyterms"))
+
+
+def understanding_of(transcribe: str, commands: Commands, start=in_background) -> Understanding | None:
+    """Sets up Deepgram when it was asked for and its key is in the environment."""
+    if transcribe != "deepgram":
+        return None
+    key = os.environ.get("SECRET_DEEPGRAM_KEY", "").strip()
+    if not key:
+        emit({"type": "error", "message": "SECRET_DEEPGRAM_KEY is not set, so only the phrase list is used"})
+        return None
+    return Understanding(commands, deepgram(key, commands.keyterms), start)
 
 
 def main() -> int:
@@ -407,6 +732,7 @@ def main() -> int:
     parser.add_argument("--window-seconds", type=float, default=8.0, help="how long to wait for a command after the wake word alone")
     parser.add_argument("--commands", help="JSON file with the command list, for use without the helper")
     parser.add_argument("--wav", help="recognize this 16 kHz mono WAV file, print the result and exit")
+    parser.add_argument("--transcribe", choices=["none", "deepgram"], default="none", help="also write down what is said after the wake word (deepgram needs SECRET_DEEPGRAM_KEY)")
     parser.add_argument("--check-words", metavar="PHRASE", help="print the words of this phrase that the speech model does not know, and exit")
     args = parser.parse_args()
 
@@ -430,7 +756,7 @@ def main() -> int:
         listed = json.loads(Path(args.commands).read_text())
         # Either the helper's message, or a bare list of commands.
         if isinstance(listed, dict):
-            commands = Commands(listed.get("commands", []), listed.get("wakes"))
+            commands = commands_of(listed)
         else:
             commands = Commands(listed)
     if args.wav:
@@ -438,7 +764,8 @@ def main() -> int:
             emit({"type": "error", "message": "--wav needs --commands"})
             return 1
         report_missing(model, commands)
-        return recognize_wav(args.wav, model, commands, Listener(commands, args.min_confidence, args.window_seconds))
+        understanding = understanding_of(args.transcribe, commands, start=lambda work: work())
+        return recognize_wav(args.wav, model, commands, Listener(commands, args.min_confidence, args.window_seconds), understanding)
 
     messages: queue.Queue = queue.Queue()
     threading.Thread(target=stdin_reader, args=(messages,), daemon=True).start()
@@ -447,7 +774,7 @@ def main() -> int:
     while commands is None:
         message = messages.get()
         if message.get("cmd") == "commands":
-            commands = Commands(message.get("commands", []), message.get("wakes"))
+            commands = commands_of(message)
 
     recorder = subprocess.Popen(
         ["arecord", "-q", "-D", args.device, "-f", "S16_LE", "-r", str(SAMPLE_RATE), "-c", "1", "-t", "raw"],
@@ -457,6 +784,7 @@ def main() -> int:
     report_missing(model, commands)
     listener = Listener(commands, args.min_confidence, args.window_seconds)
     recognizers = Recognizers(model, commands)
+    understanding = understanding_of(args.transcribe, commands)
     muted = False
     now = 0.0
     hold_until = 0.0
@@ -469,15 +797,19 @@ def main() -> int:
                 muted = bool(message.get("on"))
                 recognizers.reset()
                 listener.forget_utterance()
+                if understanding is not None:
+                    understanding.mute()
             elif message.get("cmd") == "hold":
                 hold_until = max(hold_until, now + min(2.0, float(message.get("seconds", 0.4))))
             elif message.get("cmd") == "follow_up":
                 for out in listener.open_window(now, min(30.0, float(message.get("seconds", 5))), "follow_up"):
                     emit(out)
             elif message.get("cmd") == "commands":
-                commands = Commands(message.get("commands", []), message.get("wakes"))
+                commands = commands_of(message)
                 report_missing(model, commands)
                 listener.commands = commands
+                if understanding is not None:
+                    understanding = understanding_of(args.transcribe, commands)
                 listener.forget_utterance()
                 recognizers = Recognizers(model, commands)
                 emit({"type": "ready", "phrases": len(commands.by_phrase)})
@@ -488,13 +820,19 @@ def main() -> int:
             emit({"type": "error", "message": f"The microphone stopped: {reason}"})
             return 1
         now += len(data) / 2 / SAMPLE_RATE
+        if understanding is not None:
+            for out in understanding.poll():
+                emit(out)
         if muted or now < hold_until:
             for out in listener.tick(now):
                 emit(out)
             continue
-        if listener.listening():
+        if listener.listening() or (understanding is not None and understanding.capture.active):
             emit({"type": "level", "value": level_of(data)})
-        for out in feed(recognizers, listener, data, now):
+        heard = feed(recognizers, listener, data, now)
+        if understanding is not None:
+            heard = understanding.audio(data, listener) + understanding.messages(heard)
+        for out in heard:
             emit(out)
 
 if __name__ == "__main__":

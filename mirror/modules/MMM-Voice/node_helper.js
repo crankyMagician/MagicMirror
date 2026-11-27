@@ -5,7 +5,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const { buildCommands, summarize, toneWav, wakesOf, TONES } = require("./commands");
+const { buildCommands, keyterms, summarize, toneWav, wakesOf, TONES } = require("./commands");
 
 const DATA_DIR = process.env.MIRROR_DATA_DIR || path.join(os.homedir(), "mirror-data");
 const PYTHON = path.join(DATA_DIR, "venv", "bin", "python");
@@ -125,7 +125,7 @@ module.exports = NodeHelper.create({
 			Log.error(`Missing ${PYTHON} or ${script}. Run mirror/deploy/setup-pi.sh. Voice commands are off.`);
 			return;
 		}
-		const args = [script, "--device", String(this.config.microphone), "--min-confidence", String(this.config.minConfidence), "--window-seconds", String(this.config.windowSeconds)];
+		const args = [script, "--device", String(this.config.microphone), "--min-confidence", String(this.config.minConfidence), "--window-seconds", String(this.config.windowSeconds), "--transcribe", this.config.transcribe === "deepgram" ? "deepgram" : "none"];
 		const child = spawn(PYTHON, args, { stdio: ["pipe", "pipe", "pipe"] });
 		this.service = child;
 		this.sendCommands();
@@ -157,7 +157,7 @@ module.exports = NodeHelper.create({
 	/** Sends the recognizer its phrases, and keeps a summary for the settings page. */
 	sendCommands () {
 		const config = this.current();
-		this.send({ cmd: "commands", wakes: wakesOf(config), commands: buildCommands(config) });
+		this.send({ cmd: "commands", wakes: wakesOf(config), commands: buildCommands(config), keyterms: keyterms(config), defer: config.defer || [] });
 		try {
 			fs.mkdirSync(DATA_DIR, { recursive: true });
 			fs.writeFileSync(`${COMMANDS_FILE}.tmp`, JSON.stringify(summarize(config)));
@@ -213,8 +213,20 @@ module.exports = NodeHelper.create({
 			this.ready = true;
 			Log.log(`Listening for ${message.phrases} phrases that start with ${(this.wakePhrases || [this.config.wakeWord]).map((phrase) => `"${phrase}"`).join(" or ")}`);
 			this.sendSocketNotification("VOICE_EVENT", { type: "ready" });
+		} else if (message.type === "transcript") {
+			Log.log(`Deepgram heard: ${message.text || "(nothing)"} (${message.confidence})${message.window ? ` in the ${message.window} window` : ""}`);
+			this.sendSocketNotification("VOICE_EVENT", message);
+		} else if (message.type === "utterance") {
+			Log.log(`For the house or a question: ${message.text}`);
+			this.tone("heard");
+			this.planFollowUp("utterance");
+			this.sendSocketNotification("VOICE_EVENT", message);
+		} else if (message.type === "thinking") {
+			this.sendSocketNotification("VOICE_EVENT", message);
+		} else if (message.type === "stt_failed") {
+			Log.warn(`Deepgram did not answer, so the phrase list decides: ${message.message}`);
 		} else if (message.type === "command") {
-			Log.log(`Heard: ${message.text} (${message.confidence})${message.window ? ` after a pause (${message.window})` : ""}`);
+			Log.log(`Heard: ${message.text} (${message.confidence})${message.source ? ` from ${message.source}` : ""}${message.window ? ` after a pause (${message.window})` : ""}`);
 			this.tone("heard");
 			this.planFollowUp(message.id);
 			this.sendSocketNotification("VOICE_EVENT", message);

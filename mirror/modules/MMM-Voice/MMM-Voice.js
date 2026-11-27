@@ -1,10 +1,16 @@
 /* MMM-Voice
  *
  * Listens for spoken commands that start with a wake word and broadcasts
- * them to other modules as VOICE_COMMAND. Recognition runs on the Pi with
- * Vosk (see mirror/services/voice.py). No audio leaves the Pi.
+ * them to other modules as VOICE_COMMAND. Vosk finds the wake word on the Pi
+ * (see mirror/services/voice.py). With `transcribe: "deepgram"` the seconds
+ * after the wake word also go to Deepgram, so people can say things in their
+ * own words. A sentence that is no command goes out as VOICE_UTTERANCE, for
+ * Home Assistant (MMM-Lights) or a question. A module that cannot do anything
+ * with it answers VOICE_UNHANDLED. Nothing leaves the Pi before the wake word.
  *
  *   VOICE_COMMAND { id: "good_night", text: "mirror good night", confidence: 0.97 }
+ *   VOICE_UTTERANCE { text: "dim the kitchen to 30%", window: null, person: "sam" }
+ *   VOICE_UNHANDLED { text: "dim the kitchen to 30%", window: null }
  *
  * The id is a key from `commands`, or "show:FEATURE" / "hide:FEATURE" for the
  * names in `features`. MMM-Household acts on wake_up, good_night and the
@@ -16,7 +22,7 @@
  *
  * A strip along the bottom edge of the screen shows what it is doing:
  * a faint microphone while it waits, blue while it listens (moving with the
- * voice), green with the words it understood, amber when it did not catch
+ * voice), violet while it works out what was said, green with the words it understood, amber when it did not catch
  * them, a caption while it speaks, and red when voice commands are off. The
  * strip sits in the page's bottom margin, so it covers nothing.
  *
@@ -70,7 +76,22 @@ Module.register("MMM-Voice", {
 			news: "newsfeed"
 		},
 		// Seconds the help card stays up.
-		helpSeconds: 20
+		helpSeconds: 20,
+		// "deepgram" writes down what is said after the wake word (the key is
+		// SECRET_DEEPGRAM_KEY in the server's environment). "none" uses only
+		// the phrase list.
+		transcribe: "none",
+		// Command ids that start with one of these are left to VOICE_UTTERANCE
+		// while Deepgram answers, for example the light switches, which Home
+		// Assistant understands better. Without Deepgram they work as before.
+		defer: [],
+		// More words Deepgram should expect, besides the names of lights,
+		// shows and features.
+		keyterms: [],
+		// Say "I heard ..., but I do not know how to do that yet" when no
+		// module could act on a sentence. A module that answers questions
+		// turns this off.
+		sayUnhandled: true
 	},
 
 	getStyles () {
@@ -176,6 +197,17 @@ Module.register("MMM-Voice", {
 	},
 
 	/**
+	 * Turns a written-down sentence into what the strip shows, without the wake phrase.
+	 * @param {string} text Deepgram's text, such as "Mirror, turn off the kitchen."
+	 * @returns {string} the words to show, such as "Turn off the kitchen"
+	 */
+	prettyTranscript (text) {
+		const wake = this.wake.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const words = String(text || "").replace(new RegExp(`^\\s*(hey\\s+)?(${wake}[\\s,.!?]*)+`, "i"), "").replace(/[\s.!?]+$/, "");
+		return words.charAt(0).toUpperCase() + words.slice(1);
+	},
+
+	/**
 	 * Writes the wake phrase as the screen shows it: "Mirror".
 	 * @returns {string} the wake phrase, first letter capitalized
 	 */
@@ -231,14 +263,27 @@ Module.register("MMM-Voice", {
 			}
 		} else if (message.type === "level") {
 			strip.style.setProperty("--voice-level", String(Math.max(0, Math.min(1, Number(message.value) || 0))));
+		} else if (message.type === "thinking") {
+			this.show("thinking", "...", 8);
+		} else if (message.type === "transcript") {
+			const heard = this.prettyTranscript(message.text);
+			if (heard) {
+				this.show("thinking", `Heard: "${heard}"`, 8);
+			}
+		} else if (message.type === "utterance") {
+			this.heardToday = new Date().toDateString();
+			this.show("thinking", `Heard: "${this.prettyTranscript(message.text)}"`, 15);
+			this.listening(false);
+			this.sendNotification("VOICE_UTTERANCE", { text: message.text, window: message.window || null, person: this.person });
 		} else if (message.type === "command") {
 			this.heardToday = new Date().toDateString();
 			this.show("understood", message.id === "cancel" ? "Okay" : this.pretty(message.text), 3);
 			this.listening(false);
 		} else if (message.type === "missed") {
 			this.listening(false);
-			// Talk around the mirror after an answer is not meant for it.
-			if (message.window === "follow_up") {
+			// Talk around the mirror after an answer is not meant for it, and
+			// Deepgram hearing no wake word means Vosk heard it by mistake.
+			if (message.window === "follow_up" || message.why === "no_wake") {
 				this.show("waiting");
 				return;
 			}
@@ -312,9 +357,30 @@ Module.register("MMM-Voice", {
 		return list.length > 0 ? list : ["Good night"];
 	},
 
+	/**
+	 * Says that a sentence was heard and nothing could act on it. After an
+	 * answer, talk that was not meant for the mirror gets no reply.
+	 * @param {object} payload { text, window }
+	 */
+	unhandled (payload) {
+		if (payload.window === "follow_up") {
+			this.show("waiting");
+			return;
+		}
+		const words = this.prettyTranscript(payload.text).toLowerCase();
+		this.show("missed", `Heard: "${this.prettyTranscript(payload.text)}"`, 6);
+		if (this.config.sayUnhandled && words) {
+			const text = `I heard ${words}, but I do not know how to do that yet.`;
+			this.caption = text;
+			this.sendNotification("TTS_SAY", { id: `voice-unhandled-${Date.now()}`, text });
+		}
+	},
+
 	notificationReceived (notification, payload) {
 		if (notification === "DOM_OBJECTS_CREATED") {
 			this.strip();
+		} else if (notification === "VOICE_UNHANDLED" && payload) {
+			this.unhandled(payload);
 		} else if (notification === "HOUSEHOLD_MIRROR" && payload) {
 			// The household's own wake phrase replaces `wakeWord`. While a new
 			// phrase is on trial, the mirror listens for the old and the new.

@@ -272,7 +272,16 @@ const config = {
 				// After "mirror" alone it waits this long for the command, and after
 				// an answer it listens this long for another one.
 				windowSeconds: 8,
-				followUpSeconds: 5
+				followUpSeconds: 5,
+				// Deepgram writes down what is said after "mirror" (its key is
+				// SECRET_DEEPGRAM_KEY in config.env). Without the key the phrase
+				// list works alone.
+				transcribe: "deepgram",
+				// While Deepgram answers, the light switches go to Home
+				// Assistant's Assist (MMM-Lights), which knows the floors and
+				// rooms. The shows and the music stay with the mirror.
+				defer: homeUrl ? ["light:on:", "light:off:", "light:level:"] : [],
+				keyterms: ["upstairs", "downstairs", "Hanukkah", "Pokémon", "Mew", "Miltank", "Celesteela"]
 			}
 		},
 		{

@@ -11,6 +11,11 @@
  *   "mirror, bedroom evening"                  a scene, by its name
  *   "mirror, christmas lights"                 a script, by its name
  *
+ * A sentence in a person's own words (VOICE_UTTERANCE from MMM-Voice) goes
+ * to Home Assistant's Assist, which knows the floors and rooms: "turn off
+ * upstairs", "dim the kitchen to 30%". Its answer is spoken. A sentence
+ * Assist does not understand goes back out as VOICE_UNHANDLED.
+ *
  * A command always names the state it wants. Nothing toggles.
  *
  *   {
@@ -50,6 +55,9 @@ Module.register("MMM-Lights", {
 	notificationReceived (notification, payload) {
 		if (notification === "VOICE_COMMAND" && payload && typeof payload.id === "string" && payload.id.startsWith("light:")) {
 			this.sendSocketNotification("COMMAND", { id: payload.id });
+		} else if (notification === "VOICE_UTTERANCE" && payload && payload.text) {
+			// Said in the person's own words. Home Assistant gets it first.
+			this.sendSocketNotification("CONVERSE", { text: payload.text, window: payload.window || null });
 		}
 	},
 
@@ -61,6 +69,12 @@ Module.register("MMM-Lights", {
 		} else if (notification === "SAY") {
 			// In the voice of whoever is at the mirror. MMM-Speak picks it.
 			this.sendNotification("TTS_SAY", payload);
+		} else if (notification === "CONVERSED") {
+			if (payload.say) {
+				this.sendNotification("TTS_SAY", { id: `lights-${Date.now()}`, text: payload.say });
+			} else if (payload.unhandled) {
+				this.sendNotification("VOICE_UNHANDLED", { text: payload.text, window: payload.window });
+			}
 		}
 	},
 

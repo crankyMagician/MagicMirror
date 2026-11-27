@@ -7,6 +7,7 @@
   --voice-green: #34c759;
   --voice-amber: #ffb020;
   --voice-red: #ff5a5f;
+  --voice-violet: #a78bfa;
   --voice-color: var(--color-text-dimmed);
   --voice-level: 0;
 
@@ -125,6 +126,20 @@
 
 .voice-strip.voice-missed {
   --voice-color: var(--voice-amber);
+}
+
+/* Heard, and working out what to do: the words are written down or an answer is on its way. */
+.voice-strip.voice-thinking {
+  --voice-color: var(--voice-violet);
+}
+
+.voice-strip.voice-thinking .voice-glow {
+  opacity: 0.8;
+  animation: voice-breathe 0.9s ease-in-out infinite;
+}
+
+.voice-strip.voice-thinking .voice-row {
+  color: var(--color-text);
 }
 
 .voice-strip.voice-speaking .voice-row {
