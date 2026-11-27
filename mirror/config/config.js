@@ -101,7 +101,9 @@ const everyRoom = Object.values(lights).map((light) => light.entity);
 // card, which shows the rooms.
 const floors = {
 	upstairs: { label: "Upstairs", say: "upstairs lights", entity: "light.upstairs_lights", card: false },
-	downstairs: { label: "Downstairs", say: "downstairs lights", entity: "light.downstairs_lights", card: false }
+	downstairs: { label: "Downstairs", say: "downstairs lights", entity: "light.downstairs_lights", card: false },
+	// Both floors at once. "Turn off the lights" means every light.
+	all: { label: "All lights", say: "all lights", also: ["lights", "every light"], entity: "light.all_lights", card: false }
 };
 const show = (key, say, also = []) => ({
 	say: text(say, " lights"),
@@ -127,14 +129,14 @@ const scenes = {
 	// HomePods and the TVs and turns on a switch. MMM-Radio follows that
 	// switch and plays the station on the mirror's own speaker.
 	christmas_music: { say: "christmas music", also: ["play christmas music"], entity: "script.christmas_music_on", done: "Christmas music is playing." },
-	music_off: { say: "stop the music", also: ["christmas music off"], entity: "script.christmas_music_off", done: "The music is off." },
+	music_off: { say: "stop the music", also: ["christmas music off", "music off", "stop playing music", "turn off the music", "stop the christmas music"], entity: "script.christmas_music_off", done: "The music is off." },
 	// Lights and music together. A special day's line starts it, so it is quiet.
 	christmas_morning: { say: "christmas morning", entity: "script.christmas_morning", quiet: true },
 	// Ends a show and turns every light that is on to warm white.
-	white: { say: "white lights", also: ["all lights white", "turn the lights white"], entity: "script.white_lights", members: everyRoom, done: "The lights are white." },
+	white: { say: "white lights", also: ["all lights white", "turn the lights white", "make the lights white", "lights white", "turn all lights white"], entity: "script.white_lights", members: everyRoom, done: "The lights are white." },
 	christmas_off: {
 		say: "christmas lights off",
-		also: ["turn off the christmas lights", "holiday lights off", "lights back to normal"],
+		also: ["turn off the christmas lights", "holiday lights off", "lights back to normal", "turn the lights back to normal"],
 		entity: "script.christmas_lights_off",
 		members: everyRoom,
 		done: "The lights are back to normal."

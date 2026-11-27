@@ -72,22 +72,54 @@ def confidence_of(result: dict) -> float:
     return sum(word.get("conf", 0.0) for word in words) / len(words) if words else 0.0
 
 
+# Words people put in or leave out without changing what they ask for.
+# "Turn off upstairs lights" is the same command as "turn off the upstairs lights".
+FILLER = {"the", "a", "an", "please"}
+
+
 class Commands:
-    """Maps each phrase to its command id and builds the Vosk grammars."""
+    """Maps each phrase to its command id and builds the Vosk grammars.
+
+    Besides the exact phrases it keeps a loose form of each, without filler
+    words, and every first part of a phrase, so a command cut in two by a
+    pause can be put back together.
+    """
 
     def __init__(self, commands: list[dict], wakes: list[str] | None = None):
         self.by_phrase: dict[str, str] = {}
         self.bare: dict[str, str] = {}
         self.wakes: set[str] = {clean for clean in (normalize(wake) for wake in wakes or []) if clean}
+        # Loose phrase -> command id, or None when two commands share it.
+        self.loose: dict[str, str | None] = {}
+        self.loose_bare: dict[str, str | None] = {}
+        # The loose first words of every bare phrase, such as "turn on" and "turn on kitchen".
+        self.starts: set[str] = set()
         for command in commands:
+            command_id = str(command["id"])
             for phrase in command.get("phrases", []):
                 clean = normalize(phrase)
                 if clean:
-                    self.by_phrase[clean] = str(command["id"])
+                    self.by_phrase[clean] = command_id
+                    self._add_loose(self.loose, clean, command_id)
             for phrase in command.get("bare", []):
                 clean = normalize(phrase)
                 if clean:
-                    self.bare[clean] = str(command["id"])
+                    self.bare[clean] = command_id
+                    self._add_loose(self.loose_bare, clean, command_id)
+                    words = self.loosen(clean).split()
+                    self.starts.update(" ".join(words[:count]) for count in range(1, len(words)))
+
+    def _add_loose(self, table: dict[str, str | None], clean: str, command_id: str) -> None:
+        key = self.loosen(clean)
+        table[key] = command_id if table.get(key, command_id) == command_id else None
+
+    def loosen(self, text: str) -> str:
+        """Drops filler words and a doubled wake word ("mirror mirror")."""
+        text = " ".join(word for word in text.split() if word not in FILLER)
+        for wake in self.wakes:
+            while (text + " ").startswith(f"{wake} {wake} "):
+                text = text[len(wake) + 1 :]
+        return text
 
     def grammar(self, window: bool = False) -> str:
         phrases = set(self.by_phrase) | self.wakes
@@ -96,19 +128,39 @@ class Commands:
         return json.dumps(sorted(phrases) + [UNKNOWN])
 
     def lookup(self, text: str, window: bool = False) -> str | None:
-        """Finds the command for a normalized phrase, or None."""
+        """Finds the command for a normalized phrase, or None.
+
+        An exact phrase wins. Otherwise the phrase is compared without filler
+        words, and a loose form that two commands share matches neither.
+        """
         found = self.by_phrase.get(text)
         if found is None and window:
             found = self.bare.get(text)
+        if found is None:
+            key = self.loosen(text)
+            found = self.loose.get(key)
+            if found is None and window:
+                found = self.loose_bare.get(key)
         return found
 
     def starts_with_wake(self, text: str) -> bool:
         return any(text == wake or text.startswith(wake + " ") for wake in self.wakes)
 
+    def without_wake(self, text: str) -> str:
+        """Removes the wake phrase from the front of a phrase, the longest that fits."""
+        for wake in sorted(self.wakes, key=len, reverse=True):
+            if text == wake or text.startswith(wake + " "):
+                return text[len(wake) :].strip()
+        return text
+
+    def unfinished(self, text: str) -> bool:
+        """True when a phrase is the first part of a command, such as "turn on"."""
+        return bool(text) and self.loosen(text) in self.starts
+
     def match(self, result: dict, min_confidence: float) -> dict | None:
         """Turns a Vosk final result for a full phrase into a command message, or None."""
         text = normalize(result.get("text", "").replace(UNKNOWN, " "))
-        command_id = self.by_phrase.get(text)
+        command_id = self.lookup(text)
         if command_id is None:
             return None
         confidence = confidence_of(result)
@@ -134,6 +186,8 @@ class Listener:
         self.window_reason: str | None = None
         self.started: float | None = None
         self.announced = False
+        # The first part of a command heard before a pause, such as "turn on".
+        self.so_far: str | None = None
 
     def window_open(self) -> bool:
         return self.window_until is not None
@@ -159,6 +213,7 @@ class Listener:
             return []
         self.window_until = None
         self.window_reason = None
+        self.so_far = None
         return [{"type": "window", "open": False, "reason": why}]
 
     def partial(self, text: str, now: float) -> list[dict]:
@@ -181,6 +236,8 @@ class Listener:
         reason = self.window_reason if in_window else None
         text = normalize(raw.replace(UNKNOWN, " "))
         confidence = round(confidence_of(result), 3)
+        so_far = self.so_far if in_window else None
+        self.so_far = None
         messages: list[dict] = []
         if text in self.commands.wakes and UNKNOWN not in raw:
             if confidence >= self.min_confidence:
@@ -189,6 +246,18 @@ class Listener:
             # A faint "mirror" is more often the television than a person.
             return [{"type": "listening", "on": False}] if announced else []
         command_id = self.commands.lookup(text, in_window) if text else None
+        if so_far and text:
+            # The rest of a command whose first part came before a pause.
+            joined = f"{so_far} {self.commands.without_wake(text)}"
+            if self.commands.lookup(joined, window=True) is not None:
+                text, command_id = joined, self.commands.lookup(joined, window=True)
+        if command_id is None and confidence >= self.min_confidence and UNKNOWN not in raw:
+            # "Mirror, turn on" and a pause: keep it and wait for the rest.
+            start = self.commands.without_wake(f"{so_far} {text}" if so_far else text)
+            if (in_window or self.commands.starts_with_wake(text)) and self.commands.unfinished(start):
+                opened = self.open_window(now, self.window_seconds, "wake")
+                self.so_far = start
+                return [{**opened[0], "so_far": start}]
         if command_id is not None and confidence >= self.min_confidence:
             messages.append({"type": "command", "id": command_id, "text": text, "confidence": confidence, "window": reason})
             messages += self.close_window("command")
@@ -334,7 +403,7 @@ def recognize_wav(path: str, model, commands: Commands, listener: Listener) -> i
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--device", default="plughw:CARD=Webcam", help="ALSA capture device")
-    parser.add_argument("--min-confidence", type=float, default=0.8, help="ignore commands recognized with less confidence than this")
+    parser.add_argument("--min-confidence", type=float, default=0.65, help="ignore commands recognized with less confidence than this")
     parser.add_argument("--window-seconds", type=float, default=8.0, help="how long to wait for a command after the wake word alone")
     parser.add_argument("--commands", help="JSON file with the command list, for use without the helper")
     parser.add_argument("--wav", help="recognize this 16 kHz mono WAV file, print the result and exit")

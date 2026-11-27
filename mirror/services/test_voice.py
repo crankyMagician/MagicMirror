@@ -178,6 +178,89 @@ class ListenerTest(unittest.TestCase):
         self.assertEqual(out[0]["window"], "follow_up")
 
 
+HOUSE = Commands(
+    [
+        {"id": "light:off:upstairs", "phrases": ["mirror turn off the upstairs lights"], "bare": ["turn off the upstairs lights"]},
+        {"id": "light:on:kitchen", "phrases": ["mirror turn on the kitchen lights"], "bare": ["turn on the kitchen lights"]},
+        {"id": "light:scene:christmas", "phrases": ["mirror christmas lights"], "bare": ["christmas lights"]},
+        {"id": "light:scene:christmas_music", "phrases": ["mirror christmas music"], "bare": ["christmas music"]},
+        {"id": "show:calendar", "phrases": ["mirror show the calendar"], "bare": ["show the calendar"]},
+        {"id": "show:work-calendar", "phrases": ["mirror show the work calendar"], "bare": ["show the work calendar"]},
+    ],
+    ["mirror"],
+)
+
+
+def house():
+    return Listener(HOUSE, 0.65, window_seconds=8, extend_seconds=5)
+
+
+class LooseMatchTest(unittest.TestCase):
+    """Phrases from the mirror's log on 2026-11-26 that used to be missed."""
+
+    def test_a_left_out_the_still_matches(self):
+        out = house().final(result("mirror turn off upstairs lights"), 1.0)
+        self.assertEqual(out[0]["id"], "light:off:upstairs")
+
+    def test_a_doubled_wake_word_still_matches(self):
+        out = house().final(result("mirror mirror turn on the kitchen lights"), 1.0)
+        self.assertEqual(out[0]["id"], "light:on:kitchen")
+
+    def test_other_words_still_do_not_match(self):
+        out = house().final(result("mirror turn off the kitchen upstairs lights"), 1.0)
+        self.assertEqual(out[0]["type"], "missed")
+
+    def test_a_loose_form_two_commands_share_matches_neither(self):
+        commands = Commands([{"id": "one", "phrases": ["mirror the lamp"]}, {"id": "two", "phrases": ["mirror a lamp"]}], ["mirror"])
+        self.assertEqual(commands.lookup("mirror the lamp"), "one")
+        self.assertIsNone(commands.lookup("mirror lamp"))
+
+
+class UnfinishedTest(unittest.TestCase):
+    def test_a_pause_inside_a_command_waits_for_the_rest(self):
+        heard = house()
+        out = heard.final(result("mirror turn on"), 1.0)
+        self.assertEqual(out, [{"type": "window", "open": True, "seconds": 8, "reason": "wake", "so_far": "turn on"}])
+        out = heard.final(result("the kitchen lights"), 2.5)
+        self.assertEqual(out[0]["id"], "light:on:kitchen")
+        self.assertEqual(out[0]["text"], "turn on the kitchen lights")
+        self.assertFalse(heard.window_open())
+
+    def test_a_name_alone_waits_for_lights_or_music(self):
+        heard = house()
+        self.assertEqual(heard.final(result("mirror christmas"), 1.0)[0]["so_far"], "christmas")
+        self.assertEqual(heard.final(result("music"), 2.0)[0]["id"], "light:scene:christmas_music")
+
+    def test_a_pause_can_come_twice(self):
+        heard = house()
+        heard.final(result("mirror show"), 1.0)
+        self.assertEqual(heard.final(result("the work"), 2.0)[0]["so_far"], "show the work")
+        self.assertEqual(heard.final(result("calendar"), 3.0)[0]["id"], "show:work-calendar")
+
+    def test_a_full_command_after_the_pause_still_works(self):
+        heard = house()
+        heard.final(result("mirror show"), 1.0)
+        self.assertEqual(heard.final(result("christmas lights"), 2.0)[0]["id"], "light:scene:christmas")
+
+    def test_the_first_part_is_forgotten_when_the_window_closes(self):
+        heard = house()
+        heard.final(result("mirror turn on"), 1.0)
+        heard.tick(9.5)
+        self.assertIsNone(heard.so_far)
+        self.assertEqual(heard.final(result("the kitchen lights"), 12.0), [])
+
+    def test_a_first_part_without_the_wake_word_outside_a_window_is_ignored(self):
+        self.assertEqual(house().final(result("turn on"), 1.0), [])
+
+    def test_a_faint_first_part_is_a_miss(self):
+        out = house().final(result("mirror turn on", 0.5), 1.0)
+        self.assertEqual(out[0]["type"], "missed")
+
+    def test_words_that_start_no_command_are_a_miss(self):
+        out = house().final(result("mirror on"), 1.0)
+        self.assertEqual(out[0]["type"], "missed")
+
+
 class LevelTest(unittest.TestCase):
     def test_silence_is_zero_and_loud_is_capped(self):
         import array

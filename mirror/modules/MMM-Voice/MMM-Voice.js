@@ -37,8 +37,9 @@ Module.register("MMM-Voice", {
 		// Capture level to set on that sound card at start, in percent. A webcam
 		// microphone across a room needs it high. Leave null to keep the level.
 		microphoneGain: 90,
-		// Commands recognized with less confidence than this are ignored.
-		minConfidence: 0.8,
+		// Commands recognized with less confidence than this are ignored. Real
+		// commands across the room score from about 0.65 up.
+		minConfidence: 0.65,
 		// Seconds to wait for the command after the wake word alone.
 		windowSeconds: 8,
 		// Seconds to listen without the wake word after an answer. 0 turns it off.
@@ -216,7 +217,9 @@ Module.register("MMM-Voice", {
 			}
 		} else if (message.type === "window") {
 			if (message.open) {
-				this.show("listening", message.reason === "wake" ? "Listening" : "Anything else?");
+				// After "mirror, turn on" and a pause, show what it has so far.
+				const soFar = message.so_far ? `${this.pretty(message.so_far)} ...` : "Listening";
+				this.show("listening", message.reason === "wake" ? soFar : "Anything else?");
 				strip.classList.add("voice-window");
 				this.countdown(message.seconds);
 				this.listening(true, message.reason);
